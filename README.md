@@ -37,3 +37,5 @@ The initial config is just this:
 ```
 
 By cloning this repo locally and using the commands in the makefile, easily write the config on your local machine and copy it over to the NixOs Proxmox.
+
+You can confirm that the configuration has been applied just by running `tree`, if `tree` command is found, that means configuartion was successful.
