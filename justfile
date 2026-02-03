@@ -16,7 +16,7 @@ lock:
 	scp {{NAME}}:{{REMOTE}}/flake.lock ./flake.lock
 
 # Deploy builder (rebuilds itself)
-deploy machine="builder":
+deploy machine=NAME:
 	just sync
 	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}}"
 
@@ -25,11 +25,19 @@ deploy-remote machine:
 	just sync
 	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}} --target-host {{machine}}"
 
-# Bootstrap a fresh builder — uses flake with --impure since flakes may not be fully enabled yet
-# After this succeeds, use `just lock` then `just deploy` for all subsequent deploys
+# Bootstrap a fresh builder:
+# 0. After installing nixos on the target machine (partitioning, nixos-install ...)
+# 1. Copies configuration.nix and hardware-configuration.nix from the builder
+# 2. User must manually edit configuration.nix to add: ./imports.nix to imports
+# 3. Then run `just deploy` to complete the bootstrap
 bootstrap:
-	just sync
-	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#builder"
+	scp {{NAME}}:/etc/nixos/configuration.nix ./machines/builder/configuration.nix
+	scp {{NAME}}:/etc/nixos/hardware-configuration.nix ./machines/builder/hardware-configuration.nix
+	@echo ""
+	@echo "==> Copied configuration.nix and hardware-configuration.nix"
+	@echo "==> Now edit machines/builder/configuration.nix:"
+	@echo "    Add ./imports.nix to the imports list"
+	@echo "==> Then run: just deploy"
 
 # Validate flake evaluation without building
 check machine="builder":
