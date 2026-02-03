@@ -6,4 +6,11 @@
   environment.systemPackages = [
     pkgs.tree
   ];
+
+  networking.hostName = "homelab-nixos-builder";
+
+  imports = [ 
+    ./service/tailnet.nix
+  ];
+
 }
