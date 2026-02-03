@@ -30,7 +30,7 @@
       fi
 
       # otherwise authenticate with tailscale
-      ${tailscale}/bin/tailscale up -authkey tskey-auth-kmmp2SjZnK11CNTRL-2YnL4wsQ568JthDgE1mz48sEoQFz1EGFS
+      ${tailscale}/bin/tailscale up --ssh -authkey tskey-auth-kmmp2SjZnK11CNTRL-2YnL4wsQ568JthDgE1mz48sEoQFz1EGFS
     ''; # tskey-auth is a one-time key, a pre-auth key
   };
   networking.firewall = {
