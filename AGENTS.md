@@ -4,31 +4,42 @@
 
 NixOS infrastructure-as-code for a homelab. Multi-machine mono-repo — each machine
 gets its own directory under `machines/`. Pure Nix — no application code, no
-TypeScript/JavaScript, no containers. Configuration is edited locally, rsynced to
-the remote NixOS host, and rebuilt there.
+TypeScript/JavaScript, no containers. Configuration is edited on macOS, rsynced to
+the builder machine, and rebuilt there. The builder deploys to itself and to remote
+machines via `nixos-rebuild --flake --target-host`.
 
-Key technologies: NixOS, `just` (task runner), SOPS/age (secrets), Tailscale (VPN),
-PocketBase, PostgreSQL.
+Key technologies: NixOS, Nix flakes, `just` (task runner), SOPS/age (secrets),
+Tailscale (VPN), PocketBase, PostgreSQL.
 
 Currently managed machines:
 - **builder** — Proxmox VM that builds NixOS configurations.
+- **hoster** — Hetzner VPS.
 
 ## Repository Layout
 
 ```
+flake.nix                          # Flake entry point — declares inputs + nixosConfigurations
+flake.lock                         # Pinned nixpkgs revision (generated)
 justfile                           # Deployment automation (just)
 .sops.yaml                         # Secrets encryption config (age key)
+shared/
+  base.nix                         # Common config shared by all machines (flakes, journald, tree)
 machines/
   builder/
     configuration.nix              # NixOS root entry point — imports src/config.nix
     src/
-      config.nix                   # Base host config (hostname, packages, journal) + import hub
+      config.nix                   # Machine-specific config (hostname) + import hub
       service/                     # Network/infra services (tailscale, etc.)
       backend/                     # Application backends (pocketbase, postgraphile)
       database/                    # Database engines (pg, mysql, sqlite)
+  hoster/
+    configuration.nix              # NixOS root entry point — imports src/config.nix
+    src/
+      config.nix                   # Machine-specific config (hostname) + import hub
 ```
 
-Module import chain: `configuration.nix` -> `src/config.nix` -> `src/service/*.nix`.
+Module import chain: `flake.nix` -> `machines/<machine>/configuration.nix` ->
+`shared/base.nix` + `src/config.nix` -> `src/service/*.nix`.
 Not all modules under `src/` are wired into the import chain — some are placeholders or
 reference material (e.g., `postgraphile.nix` is comments only, `mysql.nix` and
 `sqlite.nix` are empty).
@@ -36,24 +47,39 @@ reference material (e.g., `postgraphile.nix` is comments only, `mysql.nix` and
 ## Build / Deploy / Test Commands
 
 This project uses `just` as its task runner. All commands are defined in `justfile`.
+Configuration is edited on macOS, rsynced to the builder machine, and rebuilt there
+using Nix flakes.
 
 ```sh
-# Full deploy: wipe remote /etc/nixos, rsync .nix files, rebuild
+# Deploy builder (default) — rsync + nixos-rebuild switch
 just deploy
 
+# Deploy a specific machine (builder rebuilds itself)
+just deploy builder
+
+# Deploy a remote machine (builder builds and pushes to it via SSH)
+just deploy-remote hoster
+
 # Individual steps:
-just delete          # SSH rm -rf /etc/nixos/* on remote
-just copy            # rsync only .nix files to remote /etc/nixos
+just delete          # SSH rm -rf /etc/nixos/* on builder
+just copy            # rsync entire repo to builder:/etc/nixos
 just sync            # delete + copy
-just build           # SSH nixos-rebuild switch on remote
+
+# Validate flake evaluation without building:
+just check           # checks builder (default)
+just check hoster    # checks hoster
+
+# Local syntax check (macOS, no SSH):
+just syntax          # or: just s
 
 # Edit an encrypted secret file with SOPS:
 just secret <filename>
 ```
 
-The remote host is aliased as `builder` (set by `NAME := "builder"` in justfile;
-must match an entry in `~/.ssh/config`). The `copy` recipe rsyncs from
-`machines/builder/` so only that machine's config reaches the remote.
+The builder machine is the build server — all `nixos-rebuild` commands run there.
+The `copy` recipe rsyncs the entire repo (excluding `.git/` and `.jj/`) to
+`/etc/nixos` on builder. For remote machines like hoster, builder uses
+`--target-host` to push the built closure over SSH (no rsync to hoster needed).
 
 ### Testing
 
@@ -63,16 +89,9 @@ There is no automated test suite. Testing is manual:
 3. Verify the service works.
 4. If it works, deploy to the production remote.
 
-A successful `nixos-rebuild switch` (the `just build` step) is the primary
+A successful `nixos-rebuild switch` (the `just deploy` step) is the primary
 validation — NixOS module evaluation catches type errors, missing attributes,
 and invalid option values at build time.
-
-### Validating Changes Without Deploying
-
-To check syntax and evaluate without building:
-```sh
-ssh builder "nix-instantiate --eval /etc/nixos/configuration.nix"
-```
 
 ## Code Style Guidelines
 
@@ -86,7 +105,7 @@ All infrastructure code is Nix. Shell scripts appear only inside Nix heredoc str
 - **Files:** All lowercase, no separators. Short descriptive names: `pg.nix`,
   `tailnet.nix`, `pocketbase.nix`, `config.nix`.
 - **Directories:** All lowercase, single English word describing the domain:
-  `service/`, `backend/`, `database/`.
+  `service/`, `backend/`, `database/`, `shared/`, `machines/`.
 
 ### Module Structure
 
@@ -108,9 +127,10 @@ Every `.nix` file follows the standard NixOS module pattern:
 ### Imports
 
 - Use the `imports` list within a module to compose sub-modules.
-- Use relative paths for local modules (`./service/tailnet.nix`).
-- Use angle-bracket paths only for nixpkgs built-in modules
-  (`<nixpkgs/nixos/modules/...>`).
+- Use relative paths for local modules (`./service/tailnet.nix`,
+  `../../../shared/base.nix`).
+- Hardware/profile modules (e.g., installer CD) are declared in `flake.nix`
+  module lists, not in `configuration.nix`.
 - Only import modules that are actively used. Keep placeholder/WIP files
   as standalone files, not wired into the import chain.
 
@@ -158,8 +178,10 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 
 ### Nix Patterns
 
-- This project uses the **traditional NixOS channel model** (no flakes).
-  Do not introduce `flake.nix` without explicit instruction.
+- This project uses **Nix flakes**. `flake.nix` at the repo root declares
+  all inputs (pinned nixpkgs) and all `nixosConfigurations`.
+- Shared configuration lives in `shared/base.nix` and is imported by each
+  machine's `src/config.nix`.
 - No custom NixOS module options (`mkOption`) are defined — modules only
   consume upstream options via direct attribute assignment.
 - No `let ... in` bindings, overlays, or custom packages are used currently.
@@ -169,9 +191,10 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 
 ### Justfile Conventions
 
-- Variables use SCREAMING_CASE: `NAME`, `SOPS_KEY`.
-- Recipe names use lowercase: `delete`, `copy`, `sync`, `deploy`, `build`.
-- Recipes with parameters use lowercase for parameter names: `secret filename`.
+- Variables use SCREAMING_CASE: `NAME`, `SOPS_KEY`, `REMOTE`.
+- Recipe names use lowercase: `delete`, `copy`, `sync`, `deploy`, `check`.
+- Recipes with parameters use lowercase for parameter names: `secret filename`,
+  `deploy machine`.
 
 ### Error Handling
 
@@ -179,7 +202,7 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
   There is no runtime error handling in Nix configuration.
 - In embedded shell scripts, failures propagate to systemd service status.
   Use guard clauses for expected conditions (e.g., "already connected").
-- In the justfile, task chaining (e.g., `deploy: sync build`) stops on
+- In the justfile, task chaining (e.g., `deploy: sync`) stops on
   the first failure.
 
 ### Commit Messages
