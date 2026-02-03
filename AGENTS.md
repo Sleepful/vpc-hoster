@@ -2,25 +2,30 @@
 
 ## Project Overview
 
-NixOS infrastructure-as-code for a homelab Proxmox VM ("builder"). Pure Nix — no
-application code, no TypeScript/JavaScript, no containers. Configuration is edited
-locally, rsynced to the remote NixOS host, and rebuilt there.
+NixOS infrastructure-as-code for a homelab. Multi-machine mono-repo — each machine
+gets its own directory under `machines/`. Pure Nix — no application code, no
+TypeScript/JavaScript, no containers. Configuration is edited locally, rsynced to
+the remote NixOS host, and rebuilt there.
 
 Key technologies: NixOS, `just` (task runner), SOPS/age (secrets), Tailscale (VPN),
 PocketBase, PostgreSQL.
 
+Currently managed machines:
+- **builder** — Proxmox VM that builds NixOS configurations.
+
 ## Repository Layout
 
 ```
-configuration.nix          # NixOS root entry point — imports src/config.nix
-src/
-  config.nix               # Base host config (hostname, packages, journal) + import hub
-  service/                 # Network/infra services (tailscale, etc.)
-  backend/                 # Application backends (pocketbase, postgraphile)
-  database/                # Database engines (pg, mysql, sqlite)
-doc/                       # Notes and documentation
-justfile                   # Deployment automation (just)
-.sops.yaml                 # Secrets encryption config (age key)
+justfile                           # Deployment automation (just)
+.sops.yaml                         # Secrets encryption config (age key)
+machines/
+  builder/
+    configuration.nix              # NixOS root entry point — imports src/config.nix
+    src/
+      config.nix                   # Base host config (hostname, packages, journal) + import hub
+      service/                     # Network/infra services (tailscale, etc.)
+      backend/                     # Application backends (pocketbase, postgraphile)
+      database/                    # Database engines (pg, mysql, sqlite)
 ```
 
 Module import chain: `configuration.nix` -> `src/config.nix` -> `src/service/*.nix`.
@@ -47,7 +52,8 @@ just secret <filename>
 ```
 
 The remote host is aliased as `builder` (set by `NAME := "builder"` in justfile;
-must match an entry in `~/.ssh/config`).
+must match an entry in `~/.ssh/config`). The `copy` recipe rsyncs from
+`machines/builder/` so only that machine's config reaches the remote.
 
 ### Testing
 
@@ -80,7 +86,7 @@ All infrastructure code is Nix. Shell scripts appear only inside Nix heredoc str
 - **Files:** All lowercase, no separators. Short descriptive names: `pg.nix`,
   `tailnet.nix`, `pocketbase.nix`, `config.nix`.
 - **Directories:** All lowercase, single English word describing the domain:
-  `service/`, `backend/`, `database/`, `doc/`.
+  `service/`, `backend/`, `database/`.
 
 ### Module Structure
 
