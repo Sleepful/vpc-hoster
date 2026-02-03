@@ -1,10 +1,18 @@
 NAME := "builder"
 
 delete:
-	ssh {{NAME}} "rm -rf /etc/nixos/*"
+	ssh {{NAME}} "sudo rm -rf /etc/nixos/*"
 
 copy:
-	rsync -av --include='*/' --include='*.nix' --exclude='*' --exclude='.git/' . root@{{NAME}}:/etc/nixos
+	rsync -av --include='*/' --include='*.nix' --exclude='*' machines/builder/ root@{{NAME}}:/etc/nixos
+
+validate: sync
+	ssh {{NAME}} "nix-instantiate '<nixpkgs/nixos>' -A system --arg configuration /etc/nixos/configuration.nix"
+	# Done! for a thorough validation use: ssh builder "nixos-rebuild dry-build"
+
+alias s := syntax
+syntax:
+	nix-instantiate --eval ./machines/builder/configuration.nix
 
 sync: delete copy
 
