@@ -30,8 +30,9 @@
       fi
 
       # otherwise authenticate with tailscale
-      ${tailscale}/bin/tailscale up --ssh -authkey tskey-auth-kmmp2SjZnK11CNTRL-2YnL4wsQ568JthDgE1mz48sEoQFz1EGFS
+      ${tailscale}/bin/tailscale up --ssh -authkey tskey-auth-k57XKFe28x11CNTRL-hQiCHRuYdZbyCsrao5zfabkoqcL4BZk8X
     ''; # tskey-auth is a one-time key, a pre-auth key
+        # NOTE: This key needs to be updated upon new installs
   };
   networking.firewall = {
     # enable the firewall
