@@ -1,4 +1,4 @@
-NAME := "nix"
+NAME := "builder"
 
 delete:
 	ssh {{NAME}} "rm -rf /etc/nixos/*"
