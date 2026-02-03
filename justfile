@@ -25,11 +25,11 @@ deploy-remote machine:
 	just sync
 	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}} --target-host {{machine}}"
 
-# Bootstrap a fresh builder (no flakes required) — enables flakes for subsequent deploys
-# After this succeeds, use `just deploy` for all subsequent deploys
+# Bootstrap a fresh builder — uses flake with --impure since flakes may not be fully enabled yet
+# After this succeeds, use `just lock` then `just deploy` for all subsequent deploys
 bootstrap:
 	just sync
-	ssh {{NAME}} "nixos-rebuild switch --no-flake -I nixos-config={{REMOTE}}/machines/builder/configuration.nix"
+	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#builder"
 
 # Validate flake evaluation without building
 check machine="builder":
