@@ -30,7 +30,7 @@
       fi
 
       # otherwise authenticate with tailscale
-      ${tailscale}/bin/tailscale up --ssh -authkey tskey-auth-k57XKFe28x11CNTRL-hQiCHRuYdZbyCsrao5zfabkoqcL4BZk8X
+      ${tailscale}/bin/tailscale up --ssh -authkey tskey-auth-...
     ''; # tskey-auth is a one-time key, a pre-auth key
         # NOTE: This key needs to be updated upon new installs
   };

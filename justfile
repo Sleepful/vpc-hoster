@@ -1,5 +1,7 @@
 NAME := "builder"
 REMOTE := "/etc/nixos"
+DEPLOY_USER := "jose"
+DEPLOY_KEY := "/root/.ssh/id_ed25519_deploy"
 
 delete:
 	ssh {{NAME}} "rm -rf {{REMOTE}}/*"
@@ -16,14 +18,41 @@ lock:
 	scp {{NAME}}:{{REMOTE}}/flake.lock ./flake.lock
 
 # Deploy builder (rebuilds itself)
-deploy machine=NAME:
+deploy machine="builder":
 	just sync
 	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}}"
 
 # Deploy a remote machine (builder builds and pushes via SSH)
 deploy-remote machine:
 	just sync
-	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}} --target-host {{machine}}"
+	ssh {{NAME}} "NIX_SSHOPTS='-o IdentitiesOnly=yes -i {{DEPLOY_KEY}}' nixos-rebuild switch --fast --flake path:{{REMOTE}}#{{machine}} --target-host {{DEPLOY_USER}}@{{machine}} --use-remote-sudo"
+
+# One-time bootstrap deploy when DEPLOY_USER does not exist yet
+deploy-remote-bootstrap machine:
+	just sync
+	ssh {{NAME}} "NIX_SSHOPTS='-o IdentitiesOnly=yes -i {{DEPLOY_KEY}}' nixos-rebuild switch --fast --flake path:{{REMOTE}}#{{machine}} --target-host root@{{machine}}"
+
+# Deploy a remote machine to an explicit SSH target
+deploy-remote-to machine target:
+	just sync
+	ssh {{NAME}} "NIX_SSHOPTS='-o IdentitiesOnly=yes -i {{DEPLOY_KEY}}' nixos-rebuild switch --fast --flake path:{{REMOTE}}#{{machine}} --target-host {{DEPLOY_USER}}@{{target}} --use-remote-sudo"
+
+# One-time bootstrap deploy to explicit target when DEPLOY_USER is missing
+deploy-remote-to-bootstrap machine target:
+	just sync
+	ssh {{NAME}} "NIX_SSHOPTS='-o IdentitiesOnly=yes -i {{DEPLOY_KEY}}' nixos-rebuild switch --fast --flake path:{{REMOTE}}#{{machine}} --target-host root@{{target}}"
+
+# Bootstrap builder SSH deploy access for an explicit target user
+bootstrap-key-user machine target user="jose":
+	./scripts/bootstrap-deploy-key.sh --builder {{NAME}} --machine {{machine}} --target {{target}} --deploy-host {{machine}} --target-user {{user}}
+
+# Bootstrap builder SSH deploy access for default deploy user (jose)
+bootstrap-key machine target:
+	./scripts/bootstrap-deploy-key.sh --builder {{NAME}} --machine {{machine}} --target {{target}} --deploy-host {{machine}} --target-user {{DEPLOY_USER}}
+
+# Bootstrap builder SSH deploy access as root (temporary, first deploy only)
+bootstrap-key-root machine target:
+	just bootstrap-key-user {{machine}} {{target}} root
 
 # Bootstrap a fresh builder:
 # 0. After installing nixos on the target machine (partitioning, nixos-install ...)
@@ -42,13 +71,43 @@ bootstrap:
 # Validate flake evaluation without building
 check machine="builder":
 	just sync
-	ssh {{NAME}} "nix eval path:{{REMOTE}}#nixosConfigurations.{{machine}}.config.system.build.toplevel --no-build"
+	ssh {{NAME}} "nix eval path:{{REMOTE}}#nixosConfigurations.{{machine}}.config.system.build.toplevel.drvPath --raw"
+
+# Check builder usage and inode usage
+disk machine="builder":
+	ssh {{machine}} "df -h / /nix/store; echo; df -ih / /nix/store; echo; du -sh /nix/store"
 
 # Local syntax check (macOS, no SSH)
 alias s := syntax
 syntax:
 	nix-instantiate --eval ./machines/builder/configuration.nix
 
-SOPS_KEY := "~/.ssh/id_ed25519_nix_hoster" # private key for decrypting only
+# Evaluate config directly from local machine (no builder hop)
+check-local machine="house":
+	nix --extra-experimental-features "nix-command flakes" eval .#nixosConfigurations.{{machine}}.config.system.build.toplevel.drvPath --raw
+
+# Deploy house from local machine (bootstrap, root on target)
+deploy-local-house-bootstrap target="root@house":
+	nix --extra-experimental-features "nix-command flakes" run nixpkgs#nixos-rebuild -- switch --fast --flake .#house --target-host {{target}}
+
+# Deploy house from local machine (routine, jose + remote sudo)
+deploy-local-house target="jose@house":
+	nix --extra-experimental-features "nix-command flakes" run nixpkgs#nixos-rebuild -- switch --fast --flake .#house --target-host {{target}} --use-remote-sudo
+
+# Quick service health check on house
+health-house target="root@house":
+	ssh {{target}} "systemctl --failed --no-pager; echo; systemctl is-active dex outline postfix dovecot2"
+
+SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identities
 secret filename:
-	SOPS_AGE_SSH_PRIVATE_KEY_FILE={{SOPS_KEY}} sops {{filename}}
+	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops {{filename}}
+
+# Show uncommitted changes inside a git submodule
+submodule-status submodule="private":
+	@if [ ! -d "{{submodule}}" ]; then echo "Submodule path '{{submodule}}' does not exist"; exit 1; fi
+	git -C {{submodule}} status --short
+
+# Commit all changes inside a git submodule (runs git add .)
+submodule-commit-all message submodule="private":
+	@if [ ! -d "{{submodule}}" ]; then echo "Submodule path '{{submodule}}' does not exist"; exit 1; fi
+	git -C {{submodule}} add . && git -C {{submodule}} commit -m "{{message}}"

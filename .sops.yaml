@@ -1,2 +1,8 @@
+keys:
+  - &house age1rkk2ppzv60u54zalcwgzn4cw2zeemtpd7ndydm4wtzhhjz50gers9xygtp
+  - &m1_base age1mh6zszpgypkhethjkajy2wa8qdm7759d5sw2d3ce68vt03lweeqqvacce8
 creation_rules:
-    - age: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINKuIjQnJaTgd6XpOT+ZgtY3MFZL8cpYlDnL530fdmy1'
+  - key_groups:
+      - age:
+          - *house
+          - *m1_base
