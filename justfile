@@ -107,7 +107,11 @@ submodule-status submodule="private":
 	@if [ ! -d "{{submodule}}" ]; then echo "Submodule path '{{submodule}}' does not exist"; exit 1; fi
 	git -C {{submodule}} status --short
 
+submodule-diff submodule="private":
+	@if [ ! -d "{{submodule}}" ]; then echo "Submodule path '{{submodule}}' does not exist"; exit 1; fi
+	git -C {{submodule}} diff
+
 # Commit all changes inside a git submodule (runs git add .)
 submodule-commit-all message submodule="private":
 	@if [ ! -d "{{submodule}}" ]; then echo "Submodule path '{{submodule}}' does not exist"; exit 1; fi
-	git -C {{submodule}} add . && git -C {{submodule}} commit -m "{{message}}"
+	git -C {{submodule}} add . && git -C {{submodule}} commit -m "{{message}}" && git -C {{submodule}} push
