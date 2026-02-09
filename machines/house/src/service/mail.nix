@@ -62,10 +62,13 @@ in
   ];
 
   services.postfix.config = {
-    relayhost = "[smtp.postmarkapp.com]:587";
+    # Outbound relay via Mailtrap Email Sending.
+    # Mailtrap requires TLS; use STARTTLS on 587.
+    relayhost = "[live.smtp.mailtrap.io]:587";
     smtp_sasl_password_maps = "hash:/etc/postfix/sasl_passwd";
     smtp_sasl_auth_enable = "yes";
     smtp_sasl_security_options = "noanonymous";
+    smtp_tls_security_level = lib.mkForce "encrypt";
     smtp_tls_note_starttls_offer = "yes";
     smtp_tls_loglevel = "1";
   };
@@ -73,7 +76,7 @@ in
   systemd.services.postfix.preStart = ''
     user=$(cat "${config.sops.secrets.smtp_username.path}")
     pass=$(cat "${config.sops.secrets.smtp_password.path}")
-    echo "[smtp.postmarkapp.com]:587 ''${user}:''${pass}" > /etc/postfix/sasl_passwd
+    echo "[live.smtp.mailtrap.io]:587 ''${user}:''${pass}" > /etc/postfix/sasl_passwd
     chown postfix:postfix /etc/postfix
     chown postfix:postfix /etc/postfix/sasl_passwd
     ${pkgs.postfix}/sbin/postmap hash:/etc/postfix/sasl_passwd

@@ -80,6 +80,8 @@ run bootstrap once per fresh machine.
 # Deploy builder (default)
 just deploy
 
+# `just deploy` is builder-only. Use deploy-remote for non-builder machines.
+
 # Deploy house (builder builds and pushes over SSH)
 just deploy-remote house
 

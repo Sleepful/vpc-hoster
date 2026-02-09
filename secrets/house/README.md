@@ -24,3 +24,10 @@ Current keys:
 - `dex_hash_super`
 - `dex_hash_atlas`
 - `dex_hash_lumen`
+
+Notes:
+
+- SMTP relay (`smtp_username` / `smtp_password`) is used by Postfix to authenticate to the outbound provider.
+  Current provider: Mailtrap Email Sending (`live.smtp.mailtrap.io:587`).
+- Mail login hashes (`mail_hash_*`) are bcrypt (Dovecot BLF-CRYPT). Values can be raw `$2b$...` / `$2y$...` or prefixed `{BLF-CRYPT}$2y$...`.
+- On `house`, the hashes are written into `/run/dovecot2/passwd` at `dovecot2` start; the Nix config restarts `dovecot2` automatically when any `mail_hash_*` secret changes.

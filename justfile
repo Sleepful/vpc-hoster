@@ -17,10 +17,11 @@ lock:
 	ssh {{NAME}} "nix flake lock path:{{REMOTE}}"
 	scp {{NAME}}:{{REMOTE}}/flake.lock ./flake.lock
 
-# Deploy builder (rebuilds itself)
-deploy machine="builder":
+# Deploy builder only (rebuilds itself)
+# Intentionally no machine arg to avoid accidental `just deploy house`.
+deploy:
 	just sync
-	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#{{machine}}"
+	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#builder"
 
 # Deploy a remote machine (builder builds and pushes via SSH)
 deploy-remote machine:
@@ -101,6 +102,25 @@ health-house target="root@house":
 SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identities
 secret filename:
 	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops {{filename}}
+
+# Generate bcrypt hashes (raw $2y$/$2b$) for Dovecot/Dex.
+# Uses the fastest available local tool:
+# - htpasswd (preferred; interactive prompt)
+# - doveadm
+# - fallback to `nix shell nixpkgs#dovecot`
+hash-bcrypt rounds="5":
+	@bash -lc 'set -euo pipefail; r="{{rounds}}"; \
+	  if command -v htpasswd >/dev/null 2>&1; then \
+	    htpasswd -nBC "$r" user | cut -d: -f2; \
+	  elif command -v doveadm >/dev/null 2>&1; then \
+	    doveadm pw -s BLF-CRYPT -r "$r" | sed "s/^{BLF-CRYPT}//"; \
+	  else \
+	    ROUNDS="$r" nix --extra-experimental-features "nix-command flakes" shell nixpkgs#dovecot -c sh -c "doveadm pw -s BLF-CRYPT -r \"$ROUNDS\" | sed \"s/^{BLF-CRYPT}//\""; \
+	  fi'
+
+# Generate a hash on the house machine (fast, no local dependencies).
+hash-bcrypt-house rounds="5" target="root@house":
+	ssh -t {{target}} "doveadm pw -s BLF-CRYPT -r {{rounds}}"
 
 # Show uncommitted changes inside a git submodule
 submodule-status submodule="private":

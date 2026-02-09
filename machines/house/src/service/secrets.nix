@@ -12,8 +12,12 @@ in
 
   sops.secrets.syncthing_password.owner = ids.users.deployUser;
 
-  sops.secrets.smtp_username = {};
-  sops.secrets.smtp_password = {};
+  sops.secrets.smtp_username = {
+    restartUnits = [ "postfix.service" ];
+  };
+  sops.secrets.smtp_password = {
+    restartUnits = [ "postfix.service" "outline.service" ];
+  };
 
   sops.secrets.miniflux_password = {};
 
@@ -26,20 +30,41 @@ in
   sops.secrets.outline_oidc_secret_for_dex = {
     key = "outline_oidc_secret";
     owner = "dex";
+    restartUnits = [ "dex.service" ];
   };
   sops.secrets.outline_oidc_secret_for_outline = {
     key = "outline_oidc_secret";
     owner = "outline";
+    restartUnits = [ "outline.service" ];
   };
 
-  sops.secrets.mail_hash_contact = {};
-  sops.secrets.mail_hash_outline_noreply = {};
-  sops.secrets.mail_hash_family = {};
-  sops.secrets.mail_hash_shared = {};
+  # Dovecot reads hashes via /run/dovecot2/passwd generated at dovecot start.
+  # Restart dovecot automatically when hashes change.
+  sops.secrets.mail_hash_contact = {
+    restartUnits = [ "dovecot2.service" ];
+  };
+  sops.secrets.mail_hash_outline_noreply = {
+    restartUnits = [ "dovecot2.service" ];
+  };
+  sops.secrets.mail_hash_family = {
+    restartUnits = [ "dovecot2.service" ];
+  };
+  sops.secrets.mail_hash_shared = {
+    restartUnits = [ "dovecot2.service" ];
+  };
 
-  sops.secrets.dex_hash_super.owner = "dex";
-  sops.secrets.dex_hash_atlas.owner = "dex";
-  sops.secrets.dex_hash_lumen.owner = "dex";
+  sops.secrets.dex_hash_super = {
+    owner = "dex";
+    restartUnits = [ "dex.service" ];
+  };
+  sops.secrets.dex_hash_atlas = {
+    owner = "dex";
+    restartUnits = [ "dex.service" ];
+  };
+  sops.secrets.dex_hash_lumen = {
+    owner = "dex";
+    restartUnits = [ "dex.service" ];
+  };
 
   sops.templates.miniflux_creds = {
     content = ''
