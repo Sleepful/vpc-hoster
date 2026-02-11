@@ -1,7 +1,7 @@
 { pkgs, ... }:
 {
   system.stateVersion = "25.05";
-  networking.hostName = "house";
+  networking.hostName = "nixos-house";
 
   boot.loader.grub = {
     enable = true;

@@ -4,7 +4,7 @@ let
 in
 {
   system.stateVersion = "25.05";
-  networking.hostName = "homelab-nixos-builder";
+  networking.hostName = "nixos-builder";
   networking.hosts."${ids.hosts.house.ipv4}" = [
     ids.hosts.house.name
   ];
