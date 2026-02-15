@@ -21,13 +21,19 @@ let
   syncthingDeviceNames = builtins.attrNames syncthingDevices;
 in
 {
+  # Syncthing web UI accessible on LAN and Tailscale
+  networking.firewall.allowedTCPPorts = [ 8384 ];
+
   services.syncthing = {
     enable = true;
     user = "media";
     group = "media";
     dataDir = "/media/st/data";
     configDir = "/media/st/.config";
-    guiAddress = "localhost:8384";
+    # Bound to all interfaces so the nginx redirect from /syncthing/ works.
+    # Access is restricted by the firewall — only Tailscale (trustedInterfaces)
+    # and LAN port 8384 are allowed.
+    guiAddress = "0.0.0.0:8384";
     overrideDevices = true;
     overrideFolders = true;
 

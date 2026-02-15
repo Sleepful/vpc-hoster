@@ -97,6 +97,10 @@ deploy-local-house-bootstrap target="root@house":
 deploy-local-house target="jose@house":
 	nix --extra-experimental-features "nix-command flakes" run nixpkgs#nixos-rebuild -- switch --fast --flake .#house --target-host {{target}} --use-remote-sudo
 
+# Follow qbittorrent, upload, and cleanup service logs on house
+qbt-logs target="root@house":
+	ssh {{target}} "journalctl -u qbittorrent -u qbt-upload-b2 -u qbt-cleanup -f --no-pager"
+
 # Quick service health check on house
 health-house target="root@house":
 	ssh {{target}} "systemctl --failed --no-pager; echo; systemctl is-active dex outline postfix dovecot2"

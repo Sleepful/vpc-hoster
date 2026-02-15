@@ -26,5 +26,6 @@ in
     ./service/secrets.nix
     ./service/rclone-b2.nix
     ./service/copyparty.nix
+    ./service/web.nix
   ];
 }
