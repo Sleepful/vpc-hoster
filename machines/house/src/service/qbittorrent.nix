@@ -14,9 +14,17 @@
        for active torrent paths, and deletes any file in completed/ that is
        no longer tracked (orphaned after torrent removal).
 
+  Archive extraction (zip, rar):
+    If a completed item is an archive or a directory containing archives,
+    the upload service extracts them to a temporary extracted/ directory,
+    uploads the extracted contents to B2, then deletes extracted/ immediately.
+    The original archive stays in completed/ for seeding. Only top-level
+    archives are extracted (nested archives are ignored).
+
   Directories:
     /var/lib/qBittorrent/downloading  — in-progress downloads
     /var/lib/qBittorrent/completed    — finished downloads (seeding + upload)
+    /var/lib/qBittorrent/extracted    — temporary extraction dir (ephemeral)
 
   Manual operations:
     - To free disk early: remove the torrent from qBittorrent's web UI, then
@@ -34,6 +42,7 @@
 let
   ids = config.homelab.identifiers;
   completedDir = "/var/lib/qBittorrent/completed";
+  extractedDir = "/var/lib/qBittorrent/extracted";
   webuiPort = 8080;
 in
 {
@@ -62,6 +71,7 @@ in
   systemd.tmpfiles.rules = [
     "d /var/lib/qBittorrent/downloading 0755 qbittorrent qbittorrent -"
     "d ${completedDir} 0755 qbittorrent qbittorrent -"
+    "d ${extractedDir} 0755 qbittorrent qbittorrent -"
   ];
 
   # Upload completed downloads to B2 (does not delete local files).
@@ -80,12 +90,67 @@ in
       RestartSec = "30s";
     };
 
+    path = [ pkgs.unar ];
+
     script = ''
+      upload() {
+        local SRC="$1" DEST="$2"
+        if ! ${pkgs.rclone}/bin/rclone copy "$SRC" "$DEST" \
+            --transfers 4 --checksum --stats 30s --stats-log-level NOTICE; then
+          echo "Upload failed: $SRC"
+          return 1
+        fi
+        return 0
+      }
+
+      # Extract a single archive into a destination directory.
+      # unar handles both zip and rar (free/open-source).
+      extract() {
+        local ARCHIVE="$1" EXTRACT_TO="$2"
+        echo "Extracting: $(${pkgs.coreutils}/bin/basename "$ARCHIVE")"
+        unar -f -o "$EXTRACT_TO" "$ARCHIVE"
+      }
+
       for ITEM in ${completedDir}/*; do
         [ -e "$ITEM" ] || continue
+        # Skip marker files and already-uploaded items
+        case "$ITEM" in *.uploaded) continue ;; esac
+        [ -e "$ITEM.uploaded" ] && continue
 
         NAME=$(${pkgs.coreutils}/bin/basename "$ITEM")
+        WORK_DIR="${extractedDir}/$NAME"
+        HAS_ARCHIVES=0
 
+        ${pkgs.coreutils}/bin/rm -rf "$WORK_DIR"
+        ${pkgs.coreutils}/bin/mkdir -p "$WORK_DIR"
+
+        # Single file archive
+        if [ -f "$ITEM" ]; then
+          case "$ITEM" in
+            *.zip|*.rar)
+              extract "$ITEM" "$WORK_DIR"
+              HAS_ARCHIVES=1
+              ;;
+          esac
+        fi
+
+        # Directory containing archives
+        if [ -d "$ITEM" ]; then
+          for ARCHIVE in "$ITEM"/*.zip "$ITEM"/*.rar; do
+            [ -f "$ARCHIVE" ] || continue
+            extract "$ARCHIVE" "$WORK_DIR"
+            HAS_ARCHIVES=1
+          done
+        fi
+
+        # Upload extracted contents then clean up
+        if [ "$HAS_ARCHIVES" = 1 ]; then
+          echo "Uploading extracted: $NAME"
+          upload "$WORK_DIR" "b2:entertainment-netmount/downloads/$NAME"
+        fi
+        ${pkgs.coreutils}/bin/rm -rf "$WORK_DIR"
+
+        # Upload the original item (archive or not) to B2
         if [ -d "$ITEM" ]; then
           DEST="b2:entertainment-netmount/downloads/$NAME"
         else
@@ -93,12 +158,12 @@ in
         fi
 
         echo "Uploading: $NAME"
-        if ! ${pkgs.rclone}/bin/rclone copy "$ITEM" "$DEST" \
-            --transfers 4 --checksum --stats 30s --stats-log-level NOTICE; then
-          echo "Upload failed: $ITEM"
+        if ! upload "$ITEM" "$DEST"; then
           continue
         fi
 
+        # Mark as uploaded so subsequent runs skip this item
+        ${pkgs.coreutils}/bin/touch "$ITEM.uploaded"
         echo "Uploaded: $NAME"
       done
     '';
@@ -137,17 +202,36 @@ in
         exit 0
       fi
 
+      CLEANED=0
+      SKIPPED=0
+
       for ITEM in ${completedDir}/*; do
         [ -e "$ITEM" ] || continue
+        # Skip marker files (handled alongside their parent)
+        case "$ITEM" in *.uploaded) continue ;; esac
 
-        # Skip if qBittorrent is still tracking this path
-        if echo "$ACTIVE" | ${pkgs.gnugrep}/bin/grep -qxF "$ITEM"; then
+        NAME=$(${pkgs.coreutils}/bin/basename "$ITEM")
+
+        # Never delete files that haven't been uploaded yet
+        if [ ! -e "$ITEM.uploaded" ]; then
+          echo "Skipping (not yet uploaded): $NAME"
+          SKIPPED=$((SKIPPED + 1))
           continue
         fi
 
-        ${pkgs.coreutils}/bin/rm -rf "$ITEM"
-        echo "Cleaned orphan: $(${pkgs.coreutils}/bin/basename "$ITEM")"
+        # Skip if qBittorrent is still tracking this path
+        if echo "$ACTIVE" | ${pkgs.gnugrep}/bin/grep -qxF "$ITEM"; then
+          echo "Skipping (still seeding): $NAME"
+          SKIPPED=$((SKIPPED + 1))
+          continue
+        fi
+
+        ${pkgs.coreutils}/bin/rm -rf "$ITEM" "$ITEM.uploaded"
+        echo "Cleaned orphan: $NAME"
+        CLEANED=$((CLEANED + 1))
       done
+
+      echo "Cleanup done: $CLEANED removed, $SKIPPED skipped"
     '';
   };
 
@@ -161,8 +245,8 @@ in
     };
   };
 
-  # rclone is needed by the upload service
-  environment.systemPackages = [ pkgs.rclone ];
+  # rclone is needed by the upload service, unar for archive extraction
+  environment.systemPackages = [ pkgs.rclone pkgs.unar ];
 
   # Allow the qbittorrent user to read the SOPS-rendered rclone env file
   sops.templates.rclone_b2_env.group = "qbittorrent";
