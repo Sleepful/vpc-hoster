@@ -205,6 +205,12 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 - In the justfile, task chaining (e.g., `deploy: sync`) stops on
   the first failure.
 
+### Documentation
+
+- When modifying the `justfile`, always review `README.md` to ensure it still
+  accurately describes the changed recipes. Update any outdated command
+  descriptions, examples, or workflow instructions in the README to match.
+
 ### Commit Messages
 
 - Sentence-case, starting with a verb: "Adds tailscale", "adds databases

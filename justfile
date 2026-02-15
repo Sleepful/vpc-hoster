@@ -11,11 +11,9 @@ copy:
 
 sync: delete copy
 
-# Pin nixpkgs on builder, copy lockfile back to repo
+# Update flake lockfile locally
 lock:
-	just sync
-	ssh {{NAME}} "nix flake lock path:{{REMOTE}}"
-	scp {{NAME}}:{{REMOTE}}/flake.lock ./flake.lock
+	nix flake update nixpkgs
 
 # Deploy builder only (rebuilds itself)
 # Intentionally no machine arg to avoid accidental `just deploy house`.
@@ -73,6 +71,10 @@ bootstrap:
 check machine="builder":
 	just sync
 	ssh {{NAME}} "nix eval path:{{REMOTE}}#nixosConfigurations.{{machine}}.config.system.build.toplevel.drvPath --raw"
+
+# Delete all old generations and garbage-collect the Nix store
+gc machine="builder":
+	ssh {{machine}} "nix-collect-garbage -d"
 
 # Check builder usage and inode usage
 disk machine="builder":

@@ -21,5 +21,7 @@ in
 
   imports = [
     ./service/tailnet.nix
+    ./service/jellyfin.nix
+    ./service/syncthing.nix
   ];
 }

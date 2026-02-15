@@ -65,7 +65,7 @@ of the build.
 # 1. Bootstrap — deploys config without flakes, enables flakes on the machine
 just bootstrap
 
-# 2. Lock — pins nixpkgs, copies flake.lock back to your local repo
+# 2. Lock — update flake lockfile locally
 just lock
 
 # 3. Commit flake.lock so future deploys are reproducible
@@ -130,7 +130,7 @@ just submodule-commit-all "message"
 # One-time: derive age identity from SSH key for SOPS
 nix --extra-experimental-features "nix-command" run nixpkgs#ssh-to-age -- -private-key -i ~/.ssh/<your_ssh_key> >> ~/.config/sops/age/keys.txt
 
-# Re-lock nixpkgs after updating the pin in flake.nix
+# Update flake lockfile locally
 just lock
 ```
 
@@ -222,7 +222,7 @@ echo "your pub key" > /root/.ssh/authorized_keys
 ```
 - Delete the temporary password: `sudo passwd -d root`
 - Run `just bootstrap` to deploy the initial config and enable flakes
-- Run `just lock` to pin nixpkgs, then commit `flake.lock`
+- Run `just lock` to update the flake lockfile, then commit `flake.lock`
 - From now on, deploy with `just deploy`
 
 You can confirm that the configuration has been applied by running `tree` — if the
