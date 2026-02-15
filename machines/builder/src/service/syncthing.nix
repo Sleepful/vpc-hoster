@@ -25,8 +25,8 @@ in
     enable = true;
     user = "media";
     group = "media";
-    dataDir = "/media";
-    configDir = "/media/.config/syncthing";
+    dataDir = "/media/st/data";
+    configDir = "/media/st/.config";
     guiAddress = "localhost:8384";
     overrideDevices = true;
     overrideFolders = true;
@@ -34,7 +34,7 @@ in
     settings.devices = syncthingDevices;
 
     settings.folders.Media = {
-      path = "/media";
+      path = "/media/st/data";
       devices = syncthingDeviceNames;
     };
   };
