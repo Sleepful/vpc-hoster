@@ -42,8 +42,8 @@ in
 {
   imports = [
     (builtins.fetchTarball {
-      url = "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/archive/nixos-25.05/nixos-mailserver-nixos-25.05.tar.gz";
-      sha256 = "0la8v8d9vzhwrnxmmyz3xnb6vm76kihccjyidhfg6qfi3143fiwq";
+      url = "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/archive/nixos-25.11/nixos-mailserver-nixos-25.11.tar.gz";
+      sha256 = "0pqc7bay9v360x2b7irqaz4ly63gp4z859cgg5c04imknv0pwjqw";
     })
   ];
 
@@ -54,6 +54,17 @@ in
     loginAccounts = mailLoginAccounts;
     certificateScheme = "acme";
     enableManageSieve = true;
+    # Introduced in nixos-25.11 mailserver module.
+    # Migration #3 (dovecot mail directory) must be run on house BEFORE deploying:
+    #   1. ssh house
+    #   2. systemctl stop dovecot.service
+    #   3. Snapshot /var/vmail as backup
+    #   4. wcurl https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/raw/master/migrations/nixos-mailserver-migration-03.py
+    #   5. chmod +x nixos-mailserver-migration-03.py
+    #   6. ./nixos-mailserver-migration-03.py --layout default /var/vmail  (dry run)
+    #   7. ./nixos-mailserver-migration-03.py --layout default /var/vmail --execute
+    # See: https://nixos-mailserver.readthedocs.io/en/latest/migrations.html
+    stateVersion = 3;
   };
 
   services.dovecot2.sieve.extensions = [
@@ -61,16 +72,18 @@ in
     "editheader"
   ];
 
-  services.postfix.config = {
+  # services.postfix.config was renamed to services.postfix.settings.main
+  # in nixpkgs 25.11. relayhost is now typed as listOf str.
+  services.postfix.settings.main = {
     # Outbound relay via Mailtrap Email Sending.
     # Mailtrap requires TLS; use STARTTLS on 587.
-    relayhost = "[live.smtp.mailtrap.io]:587";
+    relayhost = [ "[live.smtp.mailtrap.io]:587" ];
     smtp_sasl_password_maps = "hash:/etc/postfix/sasl_passwd";
     smtp_sasl_auth_enable = "yes";
     smtp_sasl_security_options = "noanonymous";
     smtp_tls_security_level = lib.mkForce "encrypt";
     smtp_tls_note_starttls_offer = "yes";
-    smtp_tls_loglevel = "1";
+    smtp_tls_loglevel = lib.mkForce "1";
   };
 
   systemd.services.postfix.preStart = ''

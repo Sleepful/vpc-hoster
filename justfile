@@ -105,6 +105,10 @@ SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identit
 secret filename:
 	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops {{filename}}
 
+# Derive an age public key from a machine's SSH host key
+age-key machine="builder":
+	ssh {{machine}} "cat /etc/ssh/ssh_host_ed25519_key.pub" | nix --extra-experimental-features "nix-command flakes" shell nixpkgs#ssh-to-age -c ssh-to-age
+
 # Generate bcrypt hashes (raw $2y$/$2b$) for Dovecot/Dex.
 # Uses the fastest available local tool:
 # - htpasswd (preferred; interactive prompt)

@@ -27,8 +27,11 @@
       mini = lib.mkDefault "mini";
       outline = lib.mkDefault "outline";
       sync = lib.mkDefault "sync";
+      torrent = lib.mkDefault "qbit";
       tunnel = lib.mkDefault "tunnel";
     };
+
+    qbittorrent.passwordHash = lib.mkDefault "@ByteArray(placeholder==:placeholder==)";
 
     syncthing.devices = lib.mkDefault { };
 

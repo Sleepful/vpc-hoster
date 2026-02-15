@@ -23,5 +23,8 @@ in
     ./service/tailnet.nix
     ./service/jellyfin.nix
     ./service/syncthing.nix
+    ./service/secrets.nix
+    ./service/rclone-b2.nix
+    ./service/copyparty.nix
   ];
 }

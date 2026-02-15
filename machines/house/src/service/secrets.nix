@@ -112,4 +112,17 @@ in
     owner = "radicale";
     mode = "0400";
   };
+
+  # B2 credentials for qBittorrent on-complete upload script
+  sops.secrets.b2_account_id = {};
+  sops.secrets.b2_application_key = {};
+
+  sops.templates.rclone_b2_env = {
+    content = ''
+      RCLONE_CONFIG_B2_TYPE=b2
+      RCLONE_CONFIG_B2_ACCOUNT=${config.sops.placeholder.b2_account_id}
+      RCLONE_CONFIG_B2_KEY=${config.sops.placeholder.b2_application_key}
+    '';
+    mode = "0440";
+  };
 }

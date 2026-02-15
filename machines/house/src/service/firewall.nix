@@ -23,10 +23,12 @@
     587
     993
     4190
+    6881  # qBittorrent peer connections
     7000
     22000
   ];
   networking.firewall.allowedUDPPorts = [
+    6881  # qBittorrent DHT/peer discovery
     22000
     21027
     # Tailscale (optional but helps direct connectivity).

@@ -55,7 +55,14 @@ with lib;
       mini = mkOption { type = types.str; default = "mini"; };
       outline = mkOption { type = types.str; default = "outline"; };
       sync = mkOption { type = types.str; default = "sync"; };
+      torrent = mkOption { type = types.str; default = "torrent"; };
       tunnel = mkOption { type = types.str; default = "tunnel"; };
+    };
+
+    qbittorrent.passwordHash = mkOption {
+      type = types.str;
+      description = "PBKDF2 hash for qBittorrent web UI, including @ByteArray(...) wrapper.";
+      example = "@ByteArray(salt==:hash==)";
     };
 
     syncthing.devices = mkOption {

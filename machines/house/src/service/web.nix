@@ -14,6 +14,7 @@ let
     sub.mini
     sub.outline
     sub.sync
+    sub.torrent
     sub.tunnel
   ];
 in
@@ -25,6 +26,7 @@ in
     group = "nginx";
     extraDomainNames = extraDomainNames;
   };
+  # Separate cert for the mail stack — postfix and dovecot reference this path directly.
   security.acme.certs."${fqdn sub.mail}" = {
     webroot = acmeWebRoot;
     group = "nginx";
@@ -52,6 +54,16 @@ in
         useACMEHost = rootDomain;
         locations."/".root = "/var/www";
       };
+    };
+  };
+
+  # qBittorrent web UI reverse proxy
+  services.nginx.virtualHosts."${fqdn sub.torrent}" = {
+    onlySSL = true;
+    useACMEHost = rootDomain;
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:8080";
+      proxyWebsockets = true;
     };
   };
 

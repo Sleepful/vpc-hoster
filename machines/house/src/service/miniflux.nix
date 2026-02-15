@@ -17,6 +17,12 @@ in
     };
   };
 
+  # DynamicUser miniflux needs explicit peer auth in pg_hba.conf
+  # (nixpkgs 25.11 no longer adds this automatically)
+  services.postgresql.authentication = ''
+    local miniflux miniflux peer
+  '';
+
   services.nginx.virtualHosts."${fqdn sub.mini}" = {
     onlySSL = true;
     useACMEHost = rootDomain;
