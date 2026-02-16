@@ -26,6 +26,7 @@ let
         <li><a href="/jellyfin/">jellyfin</a> <span class="desc">- media streaming</span></li>
         <li><a href="/syncthing/">syncthing</a> <span class="desc">- file sync</span></li>
         <li><a href="/qbt/">qbittorrent</a> <span class="desc">- torrent client</span></li>
+        <li><a href="/rclone/">rclone</a> <span class="desc">- b2 mount / cache stats</span></li>
       </ul>
     </body>
     </html>
@@ -64,6 +65,11 @@ in
       # qBittorrent — redirect to its native port
       locations."/qbt/" = {
         return = "302 http://$host:8080/";
+      };
+
+      # rclone RC API + web GUI — cache stats, prefetch, transfer monitoring
+      locations."/rclone/" = {
+        return = "302 http://$host:5572/";
       };
     };
   };

@@ -101,6 +101,21 @@ deploy-local-house target="jose@house":
 qbt-logs target="builder":
 	ssh {{target}} "journalctl -u qbittorrent -u qbt-upload-b2 -u qbt-cleanup -f --no-pager"
 
+# List files on the B2 mount (defaults to mount root)
+b2-ls path="" target="builder":
+	ssh {{target}} "ls -lh '/media/b2/{{path}}'"
+
+# Show VFS cache stats (size, open files, active uploads/downloads)
+b2-cache target="builder":
+	ssh {{target}} "curl -s http://localhost:5572/vfs/stats | jq"
+
+# Prefetch a file or directory into VFS cache before playback.
+# Path is relative to the B2 mount root, e.g.:
+#   just b2-warm 'downloads/Movies/Some Movie (2024)/movie.mkv'
+#   just b2-warm 'downloads/Movies/Some Movie (2024)/'
+b2-warm path target="builder":
+	ssh {{target}} "curl -sf -X POST http://localhost:5572/vfs/read --data '{\"path\":\"/{{path}}\"}' && echo 'Prefetch started for: {{path}}' || echo 'Failed — is rclone-b2-mount running?'"
+
 # Quick service health check on house
 health-house target="root@house":
 	ssh {{target}} "systemctl --failed --no-pager; echo; systemctl is-active dex outline postfix dovecot2"

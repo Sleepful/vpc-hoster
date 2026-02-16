@@ -52,6 +52,7 @@ All services are accessible from the nginx dashboard at `http://builder/` (port 
 | qBittorrent peer | 6881 | — | BitTorrent incoming connections |
 | Jellyfin | 8096 | `/jellyfin/` | Media streaming |
 | Copyparty | 3923 | `/files/` | File browser / WebDAV |
+| rclone RC / Web GUI | 5572 | `/rclone/` | B2 mount cache stats, prefetch, transfer monitoring |
 
 ## Directories on builder
 
@@ -88,10 +89,50 @@ All services are accessible from the nginx dashboard at `http://builder/` (port 
 
 ## rclone mount
 
+Core settings:
 - Cache mode: `full` (files cached to local disk on access)
 - Cache size: 150 GB max, 7 day max age
 - Directory cache: 1 minute (controls how quickly new B2 content appears)
-- `--allow-other` lets Jellyfin and Copyparty (running as `media` user) access the root-owned mount.
+- `--allow-other` lets Jellyfin and Copyparty (running as `media` user) access the root-owned mount
+
+### VFS cache tuning
+
+Without read-ahead tuning, rclone only fetches bytes from B2 on demand — the player
+requests a chunk, rclone fetches it from B2, delivers it, then waits for the next
+request. For high-bitrate files this causes Jellyfin buffering on cold (uncached) files
+because B2 can't deliver bytes fast enough for real-time playback.
+
+The fix is proactive prefetching:
+
+| Flag | Default | Ours | Why |
+|------|---------|------|-----|
+| `--buffer-size` | 16M | 256M | Per-file in-memory read buffer. Larger buffer = fewer round-trips to B2. |
+| `--vfs-read-ahead` | 0 | 512M | Background prefetch beyond current read position. When Jellyfin starts playing, rclone immediately pre-fetches the next 512M from B2 so data is ready before the player needs it. This is the key flag for smooth streaming. |
+| `--vfs-fast-fingerprint` | off | on | Cache validation uses size+modtime instead of hash. Avoids re-downloading files just to check if a cache entry is valid. |
+
+Once a file is fully in VFS cache, all reads are local disk — no B2 latency.
+
+### RC API and web GUI
+
+The rclone mount exposes an HTTP API (RC) at `http://localhost:5572` on builder for
+cache observability and manual prefetch. The web GUI provides a visual dashboard for
+monitoring active transfers and bandwidth.
+
+Useful API endpoints:
+```sh
+# VFS cache stats (size, open files, items cached)
+curl http://localhost:5572/vfs/stats
+
+# Active transfers (what's downloading right now, bandwidth)
+curl http://localhost:5572/core/stats
+
+# Prefetch a file into VFS cache before playback
+curl -X POST http://localhost:5572/vfs/read \
+  -d '{"path":"/downloads/Movies/some-movie.mkv"}'
+```
+
+The web GUI is accessible at `http://builder:5572` or via the nginx dashboard at `/rclone/`.
+Bound to `127.0.0.1` only — accessible via Tailscale/SSH, not exposed to the internet.
 
 ## Monitoring
 
@@ -100,6 +141,8 @@ just qbt-logs                                    # follow all qbt service logs
 ssh builder 'systemctl status qbt-upload-b2'     # check upload service status
 ssh builder 'systemctl status qbt-cleanup'       # check cleanup service status
 ssh builder 'systemctl list-timers qbt-*'        # check timer schedule
+just b2-cache                                    # VFS cache stats (size, items)
+ssh builder 'journalctl -u rclone-b2-mount -f'   # rclone transfer logs (every 30s)
 ```
 
 ## Manual operations
@@ -109,7 +152,11 @@ ssh builder 'systemctl list-timers qbt-*'        # check timer schedule
 | Free disk early | Remove torrent in WebUI, then `ssh builder 'systemctl start qbt-cleanup'` |
 | Retry failed upload | `ssh builder 'systemctl start qbt-upload-b2'` |
 | Force Jellyfin rescan | Jellyfin dashboard > Scheduled Tasks > Scan Media Library > Run |
-| Check B2 contents | `ssh builder 'set -a; . /run/secrets/rendered/rclone_b2_env; set +a; rclone ls b2:entertainment-netmount/downloads/'` |
+| Check B2 contents | `just b2-ls downloads/` or `ssh builder 'set -a; . /run/secrets/rendered/rclone_b2_env; set +a; rclone ls b2:entertainment-netmount/downloads/'` |
+| Browse B2 mount | `just b2-ls` (root) or `just b2-ls downloads/Movies/` (subdirectory) |
+| Warm file before playback | `just b2-warm 'downloads/Movies/Some Movie (2024)/movie.mkv'` |
+| Check VFS cache stats | `just b2-cache` |
+| Open rclone web GUI | `http://builder:5572` or dashboard link at `/rclone/` |
 
 ## Disk usage during seeding
 

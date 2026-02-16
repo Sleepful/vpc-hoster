@@ -27,5 +27,6 @@
     pkgs.ripgrep
     pkgs.htop
     pkgs.cloud-utils
+    pkgs.jq
   ];
 }
