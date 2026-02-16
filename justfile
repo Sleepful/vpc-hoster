@@ -106,15 +106,16 @@ b2-ls path="" target="builder":
 	ssh {{target}} "ls -lh '/media/b2/{{path}}'"
 
 # Show VFS cache stats (size, open files, active uploads/downloads)
+# Uses POST because the rclone RC API requires POST for all endpoints.
 b2-cache target="builder":
-	ssh {{target}} "curl -s http://localhost:5572/vfs/stats | jq"
+	ssh {{target}} "curl -s -X POST http://localhost:5572/vfs/stats | jq"
 
-# Prefetch a file or directory into VFS cache before playback.
+# Prefetch a file into VFS cache before playback by reading it through
+# the FUSE mount. Streams to /dev/null — the VFS cache keeps the data.
 # Path is relative to the B2 mount root, e.g.:
 #   just b2-warm 'downloads/Movies/Some Movie (2024)/movie.mkv'
-#   just b2-warm 'downloads/Movies/Some Movie (2024)/'
 b2-warm path target="builder":
-	ssh {{target}} "curl -sf -X POST http://localhost:5572/vfs/read --data '{\"path\":\"/{{path}}\"}' && echo 'Prefetch started for: {{path}}' || echo 'Failed — is rclone-b2-mount running?'"
+	ssh {{target}} "cat '/media/b2/{{path}}' > /dev/null && echo 'Cached: {{path}}' || echo 'Failed — check path or rclone-b2-mount status'"
 
 # Quick service health check on house
 health-house target="root@house":

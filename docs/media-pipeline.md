@@ -106,33 +106,36 @@ The fix is proactive prefetching:
 
 | Flag | Default | Ours | Why |
 |------|---------|------|-----|
-| `--buffer-size` | 16M | 256M | Per-file in-memory read buffer. Larger buffer = fewer round-trips to B2. |
-| `--vfs-read-ahead` | 0 | 512M | Background prefetch beyond current read position. When Jellyfin starts playing, rclone immediately pre-fetches the next 512M from B2 so data is ready before the player needs it. This is the key flag for smooth streaming. |
+| `--buffer-size` | 16M | 512M | Per-file in-memory read buffer. Larger buffer = fewer round-trips to B2. |
+| `--vfs-read-ahead` | 0 | 1G | Background prefetch beyond current read position. When Jellyfin starts playing, rclone pre-fetches the next 1G from B2 so data is ready before the player needs it. Key flag for smooth streaming. |
+| `--vfs-read-chunk-streams` | 0 | 4 | Download 4 chunks in parallel instead of sequentially. Speeds up initial fill of the read-ahead buffer. |
 | `--vfs-fast-fingerprint` | off | on | Cache validation uses size+modtime instead of hash. Avoids re-downloading files just to check if a cache entry is valid. |
 
 Once a file is fully in VFS cache, all reads are local disk — no B2 latency.
 
 ### RC API and web GUI
 
-The rclone mount exposes an HTTP API (RC) at `http://localhost:5572` on builder for
-cache observability and manual prefetch. The web GUI provides a visual dashboard for
-monitoring active transfers and bandwidth.
+The rclone mount exposes an HTTP API (RC) at port 5572 for cache observability.
+The web GUI provides a visual dashboard for monitoring active transfers and bandwidth.
+Accessible at `http://builder:5572` or via the nginx dashboard at `/rclone/`.
 
-Useful API endpoints:
+All RC endpoints require POST. Useful ones:
 ```sh
 # VFS cache stats (size, open files, items cached)
-curl http://localhost:5572/vfs/stats
+curl -X POST http://localhost:5572/vfs/stats
 
 # Active transfers (what's downloading right now, bandwidth)
-curl http://localhost:5572/core/stats
-
-# Prefetch a file into VFS cache before playback
-curl -X POST http://localhost:5572/vfs/read \
-  -d '{"path":"/downloads/Movies/some-movie.mkv"}'
+curl -X POST http://localhost:5572/core/stats
 ```
 
-The web GUI is accessible at `http://builder:5572` or via the nginx dashboard at `/rclone/`.
-Bound to `127.0.0.1` only — accessible via Tailscale/SSH, not exposed to the internet.
+To prefetch a file into VFS cache before playback, read it through the FUSE mount:
+```sh
+# Warm a single file (streams to /dev/null, VFS cache keeps the data)
+cat /media/b2/downloads/Movies/some-movie.mkv > /dev/null
+
+# Or from your Mac:
+just b2-warm 'downloads/Movies/some-movie.mkv'
+```
 
 ## Monitoring
 

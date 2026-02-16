@@ -23,22 +23,24 @@
       # Streaming performance flags:
       # Without read-ahead, rclone only fetches bytes from B2 on demand which
       # causes Jellyfin buffering on cold (uncached) files.
-      #   buffer-size 256M    — per-file in-memory read buffer (default 16M).
+      #   buffer-size 512M    — per-file in-memory read buffer (default 16M).
       #                         Larger buffer = fewer round-trips to B2.
-      #   vfs-read-ahead 512M — background prefetch beyond current read position
+      #   vfs-read-ahead 1G   — background prefetch beyond current read position
       #                         (default 0). When Jellyfin starts playing, rclone
-      #                         pre-fetches the next 512M from B2 so data is ready
+      #                         pre-fetches the next 1G from B2 so data is ready
       #                         before the player needs it. Key flag for streaming.
+      #   vfs-read-chunk-streams 4 — download 4 chunks in parallel (default 0 = sequential).
+      #                              Speeds up initial fill of the read-ahead buffer.
       #   vfs-fast-fingerprint — cache validation uses size+modtime instead of hash.
       #                          Avoids re-downloading just to check cache validity.
       #
       # RC API flags:
-      # HTTP interface at :5572 for cache stats, prefetch, and the rclone web GUI.
-      # Bound to localhost only; access via Tailscale/SSH or nginx /rclone/.
-      # Useful endpoints:
-      #   curl localhost:5572/vfs/stats                                    — cache size, open files
-      #   curl -X POST localhost:5572/vfs/read -d '{"path":"/file.mkv"}'  — prefetch
-      #   curl localhost:5572/core/stats                                   — active transfers
+      # HTTP interface at :5572 for cache stats and the rclone web GUI.
+      # Bound to 0.0.0.0 so the web GUI is accessible from LAN/Tailscale.
+      # No auth — access is restricted by the firewall (Tailscale trustedInterfaces).
+      # All RC endpoints require POST. Useful ones:
+      #   curl -X POST localhost:5572/vfs/stats    — cache size, open files
+      #   curl -X POST localhost:5572/core/stats   — active transfers, bandwidth
       #
       # Transfer logging:
       # Logs transfer stats every 30s, visible via: journalctl -u rclone-b2-mount -f
@@ -50,11 +52,12 @@
           --allow-other \
           --dir-cache-time 1m \
           --use-mmap \
-          --buffer-size 256M \
-          --vfs-read-ahead 512M \
+          --buffer-size 512M \
+          --vfs-read-ahead 1G \
+          --vfs-read-chunk-streams 4 \
           --vfs-fast-fingerprint \
           --rc \
-          --rc-addr 127.0.0.1:5572 \
+          --rc-addr 0.0.0.0:5572 \
           --rc-no-auth \
           --rc-web-gui \
           --rc-web-gui-no-open-browser \
