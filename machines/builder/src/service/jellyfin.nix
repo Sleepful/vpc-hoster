@@ -1,3 +1,4 @@
+# Part of the media pipeline — see docs/media-pipeline.md
 { pkgs, ... }:
 {
   # First time setup:

@@ -27,5 +27,6 @@ in
     ./service/rclone-b2.nix
     ./service/copyparty.nix
     ./service/web.nix
+    ./service/qbittorrent.nix
   ];
 }

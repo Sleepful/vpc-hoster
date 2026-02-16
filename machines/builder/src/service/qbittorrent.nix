@@ -1,3 +1,4 @@
+# Part of the media pipeline — see docs/media-pipeline.md
 /*
   qBittorrent with automatic B2 upload and seeding.
 
@@ -43,13 +44,14 @@ let
   ids = config.homelab.identifiers;
   completedDir = "/var/lib/qBittorrent/completed";
   extractedDir = "/var/lib/qBittorrent/extracted";
-  webuiPort = 8080;
+  webuiPort = 8080; # WebUI for torrent management (LAN/Tailscale)
+  torrentingPort = 6881; # BitTorrent peer connections (incoming)
 in
 {
   services.qbittorrent = {
     enable = true;
     inherit webuiPort;
-    torrentingPort = 6881;
+    inherit torrentingPort;
 
     serverConfig = {
       LegalNotice.Accepted = true;
@@ -244,6 +246,14 @@ in
       OnUnitActiveSec = "10min";
     };
   };
+
+  networking.firewall.allowedTCPPorts = [
+    webuiPort      # qBittorrent WebUI (LAN/Tailscale)
+    torrentingPort # BitTorrent incoming peer connections
+  ];
+  networking.firewall.allowedUDPPorts = [
+    torrentingPort # BitTorrent incoming peer connections (UDP)
+  ];
 
   # rclone is needed by the upload service, unar for archive extraction
   environment.systemPackages = [ pkgs.rclone pkgs.unar ];

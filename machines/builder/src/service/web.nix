@@ -1,3 +1,4 @@
+# When adding a new service to builder, add a link and redirect here.
 { pkgs, ... }:
 let
   # Landing page linking to all builder services.
@@ -24,6 +25,7 @@ let
         <li><a href="/files/">copyparty</a> <span class="desc">- file manager / webdav</span></li>
         <li><a href="/jellyfin/">jellyfin</a> <span class="desc">- media streaming</span></li>
         <li><a href="/syncthing/">syncthing</a> <span class="desc">- file sync</span></li>
+        <li><a href="/qbt/">qbittorrent</a> <span class="desc">- torrent client</span></li>
       </ul>
     </body>
     </html>
@@ -57,6 +59,11 @@ in
       # Syncthing — redirect to its native port (no sub-path support)
       locations."/syncthing/" = {
         return = "302 http://$host:8384/";
+      };
+
+      # qBittorrent — redirect to its native port
+      locations."/qbt/" = {
+        return = "302 http://$host:8080/";
       };
     };
   };

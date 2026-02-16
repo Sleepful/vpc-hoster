@@ -33,7 +33,6 @@
     ./service/monitoring.nix
     ./service/aws.nix
     ./service/mc-discord.nix
-    ./service/qbittorrent.nix
     ./service/firewall.nix
   ];
 }

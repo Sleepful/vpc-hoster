@@ -1,3 +1,4 @@
+# Part of the media pipeline — see docs/media-pipeline.md
 { config, pkgs, ... }:
 {
   environment.systemPackages = [
