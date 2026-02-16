@@ -7,39 +7,44 @@ All services run on the **builder** machine.
 ## Flow
 
 ```
-qBittorrent          rclone FUSE mount        Jellyfin / Copyparty
------------          ----------------         --------------------
+Sonarr/Prowlarr      qBittorrent          rclone FUSE mount        Jellyfin / Copyparty
+---------------      -----------          ----------------         --------------------
 
- Add torrent
+ Search series
      |
+     | finds episodes via indexers (Prowlarr)
+     | sends torrent to qBittorrent
      v
- downloading/        (in-progress pieces)
-     |
-     | completion
-     v
- completed/  ------> qbt-upload-b2.service
-     |                    |
-     | seeding            | extract archives (zip/rar)
-     | (7 days)           | upload extracted to B2
-     |                    | upload original to B2
-     |                    | mark .uploaded
-     |                    v
-     |               b2:entertainment-netmount/downloads/
-     |                    |
-     |                    | rclone FUSE mount
-     |                    v
-     |               /media/b2/downloads/
-     |                    |
-     |                    +---> Jellyfin (scans every 15 min)
-     |                    +---> Copyparty (browse/WebDAV)
-     |
-     | torrent removed after 7 days
-     v
- qbt-cleanup.service
-     |
-     | deletes local files + .uploaded markers
-     v
- (disk freed)
+                     Add torrent
+                         |
+                         v
+                     downloading/        (in-progress pieces)
+                         |
+                         | completion
+                         v
+                     completed/  ------> qbt-upload-b2.service
+                         |                    |
+                         | seeding            | extract archives (zip/rar)
+                         | (7 days)           | upload extracted to B2
+                         |                    | upload original to B2
+                         |                    | mark .uploaded
+                         |                    v
+                         |               b2:entertainment-netmount/downloads/
+                         |                    |
+                         |                    | rclone FUSE mount
+                         |                    v
+                         |               /media/b2/downloads/
+                         |                    |
+                         |                    +---> Jellyfin (scans every 15 min)
+                         |                    +---> Copyparty (browse/WebDAV)
+                         |
+                         | torrent removed after 7 days
+                         v
+                     qbt-cleanup.service
+                         |
+                         | deletes local files + .uploaded markers
+                         v
+                     (disk freed)
 ```
 
 ## Services
@@ -53,6 +58,8 @@ All services are accessible from the nginx dashboard at `http://builder/` (port 
 | Jellyfin | 8096 | `/jellyfin/` | Media streaming |
 | Copyparty | 3923 | `/files/` | File browser / WebDAV |
 | rclone RC / Web GUI | 5572 | `/rclone/` | B2 mount cache stats, prefetch, transfer monitoring |
+| Sonarr | 8989 | `/sonarr/` | TV series search and download manager |
+| Prowlarr | 9696 | `/prowlarr/` | Indexer manager for Sonarr |
 
 ## Directories on builder
 
@@ -180,3 +187,49 @@ In the worst case (playing a file while it's still seeding), the same file exist
 - `machines/builder/src/service/jellyfin.nix` — media server
 - `machines/builder/src/service/copyparty.nix` — file browser / WebDAV
 - `machines/builder/src/service/secrets.nix` — B2 credentials (SOPS/age)
+- `machines/builder/src/service/sonarr.nix` — TV series search and download
+- `machines/builder/src/service/prowlarr.nix` — indexer manager
+
+## Setup Sonarr/Prowlarr
+
+Sonarr finds TV episodes on torrent indexers and sends them to qBittorrent for
+download. Prowlarr manages indexer credentials and syncs them to Sonarr so you
+only configure each indexer once. Sonarr runs in search-only mode — it does not
+move or rename downloaded files, leaving the existing B2 upload pipeline untouched.
+
+After deploying, configure both services through their web UIs:
+
+### 1. Prowlarr (`http://builder:9696`)
+
+1. Set an authentication method (Settings > General > Authentication).
+2. Add your torrent indexer(s): Indexers > Add Indexer. Search by name, fill in
+   your credentials/API key, and test the connection.
+3. Add Sonarr as an application: Settings > Apps > Add > Sonarr.
+   - Prowlarr Server: `http://localhost:9696`
+   - Sonarr Server: `http://localhost:8989`
+   - API Key: copy from Sonarr (Settings > General > API Key)
+   - Sync Level: Full Sync
+   - Test and save. Prowlarr will push your indexers to Sonarr automatically.
+
+### 2. Sonarr (`http://builder:8989`)
+
+1. Set an authentication method (Settings > General > Authentication).
+2. Add qBittorrent as a download client: Settings > Download Clients > Add > qBittorrent.
+   - Host: `localhost`
+   - Port: `8080`
+   - Leave username/password blank if qBittorrent doesn't require auth from localhost.
+   - Test and save.
+3. Disable completed download handling so the B2 pipeline manages files:
+   Settings > Download Clients > Completed Download Handling > uncheck "Remove".
+4. Set a root folder when prompted (e.g. `/var/lib/qBittorrent/completed`). Sonarr
+   requires one to track series, but it won't move files there in search-only mode.
+
+### 3. Download a series
+
+1. Series > Add New > search by name.
+2. Select the series, pick a quality profile, and set the root folder.
+3. On the series page, select the episodes or seasons you want.
+4. Click "Search Selected" — Sonarr queries your indexers via Prowlarr, picks the
+   best match, and sends the torrent to qBittorrent.
+5. qBittorrent downloads to `downloading/`, moves to `completed/` on finish, and
+   the existing `qbt-upload-b2` pipeline uploads to B2 as usual.

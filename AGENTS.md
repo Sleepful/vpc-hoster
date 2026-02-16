@@ -13,7 +13,8 @@ Tailscale (VPN), PocketBase, PostgreSQL.
 
 Currently managed machines:
 - **builder** — Proxmox VM that builds NixOS configurations.
-- **hoster** — Hetzner VPS.
+- **house** — Hetzner VPS running mail, web services, monitoring, and more.
+- **hoster** — Hetzner VPS (minimal/bootstrap configuration).
 
 ## Repository Layout
 
@@ -24,14 +25,24 @@ justfile                           # Deployment automation (just)
 .sops.yaml                         # Secrets encryption config (age key)
 shared/
   base.nix                         # Common config shared by all machines (flakes, journald, tree)
+  identifiers/
+    default.nix                    # Shared identifier values (domains, addresses, etc.)
+  options/
+    identifiers.nix                # Custom option declarations for identifiers
 machines/
   builder/
     configuration.nix              # NixOS root entry point — imports src/config.nix
     src/
       config.nix                   # Machine-specific config (hostname) + import hub
-      service/                     # Network/infra services (tailscale, etc.)
+      service/                     # Network/infra services (tailscale, jellyfin, syncthing, etc.)
       backend/                     # Application backends (pocketbase, postgraphile)
       database/                    # Database engines (pg, mysql, sqlite)
+  house/
+    configuration.nix              # NixOS root entry point — imports src/config.nix
+    src/
+      config.nix                   # Machine-specific config (hostname) + import hub
+      service/                     # Mail, monitoring, miniflux, outline, frp, etc.
+      data/                        # Static data files (loki, promtail configs)
   hoster/
     configuration.nix              # NixOS root entry point — imports src/config.nix
     src/

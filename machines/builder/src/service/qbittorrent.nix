@@ -56,7 +56,14 @@ in
     serverConfig = {
       LegalNotice.Accepted = true;
 
-      Preferences."WebUI\\Password_PBKDF2" = ids.qbittorrent.passwordHash;
+      Preferences = {
+        "WebUI\\Password_PBKDF2" = ids.qbittorrent.passwordHash;
+        # Bypass auth for localhost (systemd scripts) and Tailscale CGNAT subnet.
+        # Tailscale is the auth layer — no need for a second login.
+        "WebUI\\LocalHostAuth" = false;
+        "WebUI\\AuthSubnetWhitelistEnabled" = true;
+        "WebUI\\AuthSubnetWhitelist" = "100.64.0.0/10";
+      };
 
       BitTorrent.Session = {
         DefaultSavePath = completedDir;
@@ -195,11 +202,11 @@ in
     };
 
     script = ''
-      # Get content paths of all torrents qBittorrent is tracking
-      ACTIVE=$(${pkgs.curl}/bin/curl -sf "http://localhost:${toString webuiPort}/api/v2/torrents/info" \
-        | ${pkgs.jq}/bin/jq -r '.[].content_path // empty')
+      set -o pipefail
 
-      if [ -z "$ACTIVE" ] && [ $? -ne 0 ]; then
+      # Get content paths of all torrents qBittorrent is tracking
+      if ! ACTIVE=$(${pkgs.curl}/bin/curl -sf "http://localhost:${toString webuiPort}/api/v2/torrents/info" \
+        | ${pkgs.jq}/bin/jq -r '.[].content_path // empty'); then
         echo "Failed to query qBittorrent API, skipping cleanup"
         exit 0
       fi

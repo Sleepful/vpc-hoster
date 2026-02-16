@@ -28,5 +28,7 @@ in
     ./service/copyparty.nix
     ./service/web.nix
     ./service/qbittorrent.nix
+    ./service/prowlarr.nix
+    ./service/sonarr.nix
   ];
 }
