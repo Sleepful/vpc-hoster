@@ -18,13 +18,13 @@
        /media/arr/tv/ and /media/arr/movies/ for new files (nice names from
        *arr) and uploads them to B2. Falls back to scanning completed/ for
        uncategorized downloads not managed by *arr.
-    5. qBittorrent seeds indefinitely (no built-in ratio/time limits).
-    6. qbt-cleanup.timer runs every 10 minutes. For items that have been uploaded
-       and seeded for >= seedingDays:
-       - Removes the torrent from qBittorrent via API
-       - Deletes files from completed/ (the seeding copy)
-       - Finds and deletes hard links from /media/arr/tv/ or /media/arr/movies/
-       - Prunes empty directories left behind
+     5. qBittorrent seeds indefinitely (no built-in ratio/time limits).
+     6. qbt-cleanup.timer runs every 10 minutes. For items that have been uploaded
+        and seeded for >= minSeedingDays (10 days) with avg upload rate < 2 KB/s:
+        - Removes the torrent from qBittorrent via API
+        - Deletes files from completed/ (the seeding copy)
+        - Finds and deletes hard links from /media/arr/tv/ or /media/arr/movies/
+        - Prunes empty directories left behind
 
   Archive extraction (zip, rar):
     If a completed item is an archive or a directory containing archives,
@@ -74,7 +74,8 @@ let
   extractedDir = "/var/lib/qBittorrent/extracted";
   webuiPort = 8080; # WebUI for torrent management (LAN/Tailscale)
   torrentingPort = 6881; # BitTorrent peer connections (incoming)
-  seedingDays = 7; # How long to seed before cleanup removes the torrent and files
+  minSeedingDays = 10; # Minimum days to seed before considering removal
+  minAvgRate = 2048; # Minimum avg upload rate (bytes/sec) to keep seeding (2 KB/s)
 
   # Download categories — each maps to a subdirectory under completed/ and an
   # import directory under /media/ where Sonarr/Radarr hard link with nice names.
@@ -363,8 +364,9 @@ in
 
   # Manage seeding lifetime and clean up completed downloads.
   # Runs every 10 minutes. For each uploaded file in completed/:
-  #   - If the torrent has been seeding for >= seedingDays and was uploaded to
-  #     B2, remove the torrent from qBittorrent and delete local files.
+  #   - Seed for at least minSeedingDays (10 days).
+  #   - After that, remove if avg upload rate < minAvgRate (2 KB/s).
+  #     avg_rate = total_uploaded / seeding_duration.
   #   - Also removes hard links from /media/arr/tv/ and /media/arr/movies/ by inode,
   #     and prunes empty directories left behind.
   #   - If the file is orphaned (no longer tracked by qBittorrent, e.g.
@@ -383,12 +385,13 @@ in
       set -o pipefail
 
       API="http://localhost:${toString webuiPort}/api/v2"
-      MAX_AGE=$((${toString seedingDays} * 86400))
+      MIN_AGE=$((${toString minSeedingDays} * 86400))
+      MIN_AVG_RATE=${toString minAvgRate}
       NOW=$(${pkgs.coreutils}/bin/date +%s)
 
-      # Fetch all torrents with their content paths, hashes, and completion times
+      # Fetch all torrents with their content paths, hashes, completion times, and upload stats
       if ! TORRENTS=$(${pkgs.curl}/bin/curl -sf "$API/torrents/info" \
-        | ${pkgs.jq}/bin/jq -c '.[] | {hash, content_path, completion_on}'); then
+        | ${pkgs.jq}/bin/jq -c '.[] | {hash, content_path, completion_on, uploaded, size}'); then
         echo "Failed to query qBittorrent API, skipping cleanup"
         exit 0
       fi
@@ -458,20 +461,39 @@ in
             --arg path "$ITEM" 'select(.content_path == $path)' 2>/dev/null || true)
 
           if [ -n "$MATCH" ]; then
-            # Torrent is still tracked — check if it's old enough to remove
+            # Torrent is still tracked — check seeding age and upload rate
             COMPLETED_ON=$(echo "$MATCH" | ${pkgs.jq}/bin/jq -r '.completion_on')
             HASH=$(echo "$MATCH" | ${pkgs.jq}/bin/jq -r '.hash')
+            UPLOADED=$(echo "$MATCH" | ${pkgs.jq}/bin/jq -r '.uploaded')
             AGE=$((NOW - COMPLETED_ON))
 
-            if [ "$AGE" -lt "$MAX_AGE" ]; then
-              DAYS_LEFT=$(( (MAX_AGE - AGE) / 86400 ))
+            # Never remove before minimum seeding period
+            if [ "$AGE" -lt "$MIN_AGE" ]; then
+              DAYS_LEFT=$(( (MIN_AGE - AGE) / 86400 ))
               echo "Seeding ($DAYS_LEFT days left): $NAME"
               SEEDING=$((SEEDING + 1))
               continue
             fi
 
-            # Seeding period is over — remove torrent from qBittorrent
-            echo "Removing torrent after ${toString seedingDays} days: $NAME"
+            # Compute average upload rate (bytes/sec) over seeding duration
+            if [ "$AGE" -gt 0 ]; then
+              AVG_RATE=$((UPLOADED / AGE))
+            else
+              AVG_RATE=0
+            fi
+
+            # Keep seeding if average rate is above threshold
+            if [ "$AVG_RATE" -ge "$MIN_AVG_RATE" ]; then
+              AVG_KBS=$((AVG_RATE / 1024))
+              echo "Seeding (active, avg ''${AVG_KBS} KB/s): $NAME"
+              SEEDING=$((SEEDING + 1))
+              continue
+            fi
+
+            # Stale torrent — remove from qBittorrent
+            AVG_KBS=$((AVG_RATE / 1024))
+            DAYS=$((AGE / 86400))
+            echo "Removing (''${DAYS}d seeding, avg ''${AVG_KBS} KB/s < 2 KB/s): $NAME"
             ${pkgs.curl}/bin/curl -sf -X POST "$API/torrents/delete" \
               --data-urlencode "hashes=$HASH" \
               --data-urlencode "deleteFiles=false" || true

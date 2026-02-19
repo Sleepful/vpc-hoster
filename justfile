@@ -105,6 +105,10 @@ deploy-local-house target="jose@house":
 qbt-logs target="builder":
 	ssh {{target}} "journalctl -u qbittorrent -u qbt-upload-b2 -u qbt-cleanup -f --no-pager"
 
+# List active torrents with avg upload rate, seeding duration, and size
+torrents target="builder":
+	python3 scripts/torrents.py {{target}}
+
 # List files on the B2 mount (defaults to mount root)
 b2-ls path="" target="builder":
 	ssh {{target}} "ls -lh '/media/b2/{{path}}'"
