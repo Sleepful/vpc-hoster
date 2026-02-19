@@ -273,8 +273,14 @@ in
           return 1
         fi
 
-        # Mark as uploaded so subsequent runs skip this item
-        ${pkgs.coreutils}/bin/touch "$ITEM.uploaded"
+        # Mark as uploaded so subsequent runs skip this item.
+        # If we can't write the marker (e.g. directory permissions), warn loudly
+        # and exit non-zero so we don't silently re-upload on every timer tick.
+        if ! ${pkgs.coreutils}/bin/touch "$ITEM.uploaded" 2>/dev/null; then
+          echo "ERROR: Cannot create upload marker: $ITEM.uploaded (permission denied)"
+          echo "Fix ownership: chown -R media:media \"$(${pkgs.coreutils}/bin/dirname "$ITEM")\""
+          return 1
+        fi
         echo "Uploaded: $NAME"
       }
 

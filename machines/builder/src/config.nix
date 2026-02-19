@@ -31,5 +31,6 @@ in
     ./service/prowlarr.nix
     ./service/sonarr.nix
     ./service/radarr.nix
+    ./service/bazarr.nix
   ];
 }

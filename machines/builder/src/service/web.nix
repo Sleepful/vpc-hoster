@@ -30,6 +30,7 @@ let
         <li><a href="/sonarr/">sonarr</a> <span class="desc">- tv series search / download</span></li>
         <li><a href="/radarr/">radarr</a> <span class="desc">- movie search / download</span></li>
         <li><a href="/prowlarr/">prowlarr</a> <span class="desc">- indexer manager</span></li>
+        <li><a href="/bazarr/">bazarr</a> <span class="desc">- subtitle manager</span></li>
       </ul>
     </body>
     </html>
@@ -88,6 +89,11 @@ in
       # Prowlarr — indexer manager for Sonarr/Radarr
       locations."/prowlarr/" = {
         return = "302 http://$host:9696/";
+      };
+
+      # Bazarr — subtitle manager for Sonarr/Radarr
+      locations."/bazarr/" = {
+        return = "302 http://$host:6767/";
       };
     };
   };
