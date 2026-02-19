@@ -5,9 +5,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 from upload import (
+    link_to_import_dir,
     mark_uploaded,
+    needs_linking,
     parse_categories,
     process_item,
+    propagate_markers,
     rclone_check,
     rclone_copy,
     scan_completed_dir,
@@ -247,3 +250,305 @@ class TestScanCompletedDir:
 
         scan_completed_dir(tmp_path, "downloads/", "b2:bucket", "/tmp/extracted", set())
         assert mock_process.call_count == 2
+
+
+class TestNeedsLinking:
+    def test_unlinked_file(self, tmp_path):
+        """A file with nlink == 1 needs linking."""
+        f = tmp_path / "movie.mkv"
+        f.write_bytes(b"data")
+        assert needs_linking(f) is True
+
+    def test_linked_file(self, tmp_path):
+        """A file with nlink > 1 (already hard linked) does not need linking."""
+        f = tmp_path / "movie.mkv"
+        f.write_bytes(b"data")
+        link = tmp_path / "link.mkv"
+        os.link(f, link)
+        assert needs_linking(f) is False
+
+    def test_unlinked_directory(self, tmp_path):
+        """A directory where all files have nlink == 1 needs linking."""
+        d = tmp_path / "torrent"
+        d.mkdir()
+        (d / "file1.mkv").write_bytes(b"data1")
+        (d / "file2.mkv").write_bytes(b"data2")
+        assert needs_linking(d) is True
+
+    def test_directory_with_linked_file(self, tmp_path):
+        """A directory with any nlink > 1 file does not need linking (arr-managed)."""
+        d = tmp_path / "torrent"
+        d.mkdir()
+        f = d / "file.mkv"
+        f.write_bytes(b"data")
+        link = tmp_path / "linked.mkv"
+        os.link(f, link)
+        assert needs_linking(d) is False
+
+    def test_empty_directory(self, tmp_path):
+        """An empty directory needs linking (no files to check)."""
+        d = tmp_path / "empty"
+        d.mkdir()
+        assert needs_linking(d) is True
+
+
+class TestLinkToImportDir:
+    def test_links_manual_file(self, tmp_path):
+        """Manual file (nlink == 1) gets hard linked to import dir."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"data")
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        dst = import_dir / "movie.mkv"
+        assert dst.exists()
+        assert os.stat(src).st_ino == os.stat(dst).st_ino
+
+    def test_links_manual_directory(self, tmp_path):
+        """Manual directory (all nlink == 1) gets hard linked preserving structure."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        torrent = completed / "My.Movie.2024"
+        torrent.mkdir()
+        f1 = torrent / "movie.mkv"
+        f1.write_bytes(b"video")
+        sub = torrent / "Subs"
+        sub.mkdir()
+        f2 = sub / "english.srt"
+        f2.write_bytes(b"subs")
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        dst_movie = import_dir / "My.Movie.2024" / "movie.mkv"
+        dst_subs = import_dir / "My.Movie.2024" / "Subs" / "english.srt"
+        assert dst_movie.exists()
+        assert dst_subs.exists()
+        assert os.stat(f1).st_ino == os.stat(dst_movie).st_ino
+        assert os.stat(f2).st_ino == os.stat(dst_subs).st_ino
+
+    def test_skips_arr_managed(self, tmp_path):
+        """Items with nlink > 1 (arr-managed) are not re-linked."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "torrent.mkv"
+        src.write_bytes(b"data")
+        # Simulate Sonarr/Radarr hard link (different name)
+        arr_link = import_dir / "Movie Name (2024).mkv"
+        os.link(src, arr_link)
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        # Should NOT create a second link with the torrent name
+        assert not (import_dir / "torrent.mkv").exists()
+        # Original arr link still exists
+        assert arr_link.exists()
+
+    def test_skips_already_uploaded(self, tmp_path):
+        """Items with .uploaded marker are skipped."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"data")
+        (completed / "movie.mkv.uploaded").touch()
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        assert not (import_dir / "movie.mkv").exists()
+
+    def test_skips_existing_destination(self, tmp_path):
+        """Does not overwrite existing files in import dir."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"new data")
+        # Pre-existing file in import dir with different content
+        existing = import_dir / "movie.mkv"
+        existing.write_bytes(b"old data")
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        # Existing file should not be overwritten
+        assert existing.read_bytes() == b"old data"
+
+    def test_nonexistent_subdir(self, tmp_path):
+        """No crash when completed subdir doesn't exist."""
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+    def test_multiple_subdirs(self, tmp_path):
+        """Links items across multiple subdirs."""
+        for subdir in ("tv", "movies"):
+            (tmp_path / "completed" / subdir).mkdir(parents=True)
+            (tmp_path / "arr" / subdir).mkdir(parents=True)
+
+        (tmp_path / "completed" / "tv" / "show.mkv").write_bytes(b"tv")
+        (tmp_path / "completed" / "movies" / "film.mkv").write_bytes(b"film")
+
+        link_to_import_dir(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies", "tv"]
+        )
+
+        assert (tmp_path / "arr" / "tv" / "show.mkv").exists()
+        assert (tmp_path / "arr" / "movies" / "film.mkv").exists()
+
+
+class TestPropagateMarkers:
+    def test_propagates_for_manual_item(self, tmp_path):
+        """Marker propagated when import dir file (same inode) is marked uploaded."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"data")
+        dst = import_dir / "movie.mkv"
+        os.link(src, dst)
+        # Mark import dir version as uploaded
+        (import_dir / "movie.mkv.uploaded").touch()
+
+        propagate_markers(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        assert (completed / "movie.mkv.uploaded").exists()
+
+    def test_propagates_for_arr_managed(self, tmp_path):
+        """Marker propagated for arr items (different names, same inodes)."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies" / "Movie Name (2024)"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "torrent.x264.mkv"
+        src.write_bytes(b"data")
+        # Sonarr/Radarr hard link with a different name
+        dst = import_dir / "Movie Name.mkv"
+        os.link(src, dst)
+        (import_dir / "Movie Name.mkv.uploaded").touch()
+
+        propagate_markers(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        assert (completed / "torrent.x264.mkv.uploaded").exists()
+
+    def test_propagates_for_directory(self, tmp_path):
+        """Marker propagated for directory items when all file inodes match."""
+        completed = tmp_path / "completed" / "tv"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "tv"
+        import_dir.mkdir(parents=True)
+
+        torrent = completed / "show-torrent"
+        torrent.mkdir()
+        f1 = torrent / "ep1.mkv"
+        f1.write_bytes(b"ep1")
+        f2 = torrent / "ep2.mkv"
+        f2.write_bytes(b"ep2")
+
+        # Hard link both files to import dir
+        dst_dir = import_dir / "show-torrent"
+        dst_dir.mkdir()
+        os.link(f1, dst_dir / "ep1.mkv")
+        os.link(f2, dst_dir / "ep2.mkv")
+        (dst_dir / "ep1.mkv.uploaded").touch()
+        (dst_dir / "ep2.mkv.uploaded").touch()
+
+        propagate_markers(str(tmp_path / "completed"), str(tmp_path / "arr"), ["tv"])
+
+        assert (completed / "show-torrent.uploaded").exists()
+
+    def test_no_propagation_if_not_all_uploaded(self, tmp_path):
+        """No marker if some files in import dir are not yet uploaded."""
+        completed = tmp_path / "completed" / "tv"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "tv"
+        import_dir.mkdir(parents=True)
+
+        torrent = completed / "show-torrent"
+        torrent.mkdir()
+        f1 = torrent / "ep1.mkv"
+        f1.write_bytes(b"ep1")
+        f2 = torrent / "ep2.mkv"
+        f2.write_bytes(b"ep2")
+
+        dst_dir = import_dir / "show-torrent"
+        dst_dir.mkdir()
+        os.link(f1, dst_dir / "ep1.mkv")
+        os.link(f2, dst_dir / "ep2.mkv")
+        # Only one of two files marked as uploaded
+        (dst_dir / "ep1.mkv.uploaded").touch()
+
+        propagate_markers(str(tmp_path / "completed"), str(tmp_path / "arr"), ["tv"])
+
+        assert not (completed / "show-torrent.uploaded").exists()
+
+    def test_skips_already_marked(self, tmp_path):
+        """Items already marked as uploaded are skipped."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"data")
+        (completed / "movie.mkv.uploaded").touch()
+
+        propagate_markers(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        # Should not crash or change anything
+        assert (completed / "movie.mkv.uploaded").exists()
+
+    def test_no_propagation_if_no_match(self, tmp_path):
+        """No marker if file inodes don't exist in import dir."""
+        completed = tmp_path / "completed" / "movies"
+        completed.mkdir(parents=True)
+        import_dir = tmp_path / "arr" / "movies"
+        import_dir.mkdir(parents=True)
+
+        src = completed / "movie.mkv"
+        src.write_bytes(b"data")
+        # No hard link in import dir — inode won't match anything
+
+        propagate_markers(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )
+
+        assert not (completed / "movie.mkv.uploaded").exists()
+
+    def test_nonexistent_dirs(self, tmp_path):
+        """No crash when directories don't exist."""
+        propagate_markers(
+            str(tmp_path / "completed"), str(tmp_path / "arr"), ["movies"]
+        )

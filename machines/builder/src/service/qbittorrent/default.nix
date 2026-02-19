@@ -20,7 +20,7 @@
        uncategorized downloads not managed by *arr.
      5. qBittorrent seeds indefinitely (no built-in ratio/time limits).
      6. qbt-cleanup.timer runs every 10 minutes. For items that have been uploaded
-        and seeded for >= minSeedingDays (10 days) with avg upload rate < 2 KB/s:
+        and seeded for >= minSeedingHours (340 hours) with avg upload rate < 2 KB/s:
         - Removes the torrent from qBittorrent via API
         - Deletes files from completed/ (the seeding copy)
         - Finds and deletes hard links from /media/arr/tv/ or /media/arr/movies/
@@ -34,10 +34,12 @@
     archives are extracted (nested archives are ignored).
 
   Categories:
-    Downloads are organized by category (set by Sonarr/Radarr when sending
-    a torrent). Each category maps to a subdirectory under completed/:
-      tv-sonarr → completed/tv/
-      radarr    → completed/movies/
+    Downloads are organized by category. Each category maps to a subdirectory
+    under completed/:
+      tv-sonarr → completed/tv/     (set by Sonarr, hard linked by Sonarr)
+      radarr    → completed/movies/  (set by Radarr, hard linked by Radarr)
+      tv        → completed/tv/      (manual, hard linked by upload script)
+      movie     → completed/movies/  (manual, hard linked by upload script)
     Uncategorized downloads land directly in completed/ → downloads/ on B2.
 
   Import directories (Sonarr/Radarr root folders):
@@ -89,15 +91,19 @@ let
   b2Remote = "b2:entertainment-netmount";
   webuiPort = 8080; # WebUI for torrent management (LAN/Tailscale)
   torrentingPort = 6881; # BitTorrent peer connections (incoming)
-  minSeedingDays = 10; # Minimum days to seed before considering removal
+  minSeedingHours = 340; # Minimum hours to seed before considering removal
   minAvgRate = 2048; # Minimum avg upload rate (bytes/sec) to keep seeding (2 KB/s)
 
   # Download categories — each maps to a subdirectory under completed/ and an
-  # import directory under importBase/ where Sonarr/Radarr hard link with nice names.
+  # import directory under importBase/ where files are hard linked with nice names.
+  # Arr categories (tv-sonarr, radarr): Sonarr/Radarr create hard links automatically.
+  # Manual categories (tv, movie): the upload script creates hard links.
   # Uncategorized downloads land directly in completed/ → downloads/ on B2.
   categories = {
     tv-sonarr = "tv";
     radarr = "movies";
+    tv = "tv";
+    movie = "movies";
   };
 
   # Serialized for Python scripts: "tv-sonarr:tv,radarr:movies"
@@ -214,7 +220,7 @@ in
 
   # Manage seeding lifetime and clean up completed downloads.
   # Runs every 10 minutes. For each uploaded file in completed/:
-  #   - Seed for at least minSeedingDays (10 days).
+  #   - Seed for at least minSeedingHours (340 hours).
   #   - After that, remove if avg upload rate < minAvgRate (2 KB/s).
   #     avg_rate = total_uploaded / seeding_duration.
   #   - Also removes hard links from /media/arr/tv/ and /media/arr/movies/ by inode,
@@ -234,7 +240,7 @@ in
         "QBT_API_URL=http://localhost:${toString webuiPort}/api/v2"
         "COMPLETED_DIR=${completedDir}"
         "IMPORT_BASE=${importBase}"
-        "MIN_SEEDING_DAYS=${toString minSeedingDays}"
+        "MIN_SEEDING_HOURS=${toString minSeedingHours}"
         "MIN_AVG_RATE=${toString minAvgRate}"
         "CATEGORIES=${categoriesEnv}"
       ];

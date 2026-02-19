@@ -1,7 +1,7 @@
 """Clean up completed qBittorrent downloads after seeding.
 
 Manages torrent seeding lifetime. For items that have been uploaded to B2
-and seeded for >= MIN_SEEDING_DAYS with avg upload rate < MIN_AVG_RATE:
+and seeded for >= MIN_SEEDING_HOURS with avg upload rate < MIN_AVG_RATE:
   - Removes the torrent from qBittorrent via API
   - Deletes files from completed/ (the seeding copy)
   - Finds and deletes hard links from import directories by inode
@@ -14,7 +14,7 @@ Environment variables:
   QBT_API_URL        - qBittorrent API base URL
   COMPLETED_DIR      - base directory for completed downloads
   IMPORT_BASE        - base path for import directories (e.g. /media/arr)
-  MIN_SEEDING_DAYS   - minimum days to seed before considering removal
+  MIN_SEEDING_HOURS  - minimum hours to seed before considering removal
   MIN_AVG_RATE       - minimum avg upload rate in bytes/sec to keep seeding
   CATEGORIES         - comma-separated name:subdir pairs
 """
@@ -169,8 +169,8 @@ def should_keep_seeding(torrent, now, min_age, min_avg_rate):
     age = now - torrent["completion_on"]
 
     if age < min_age:
-        days_left = (min_age - age) // 86400
-        return True, f"Seeding ({days_left} days left)"
+        hours_left = (min_age - age) // 3600
+        return True, f"Seeding ({hours_left}h left)"
 
     avg_rate = torrent["uploaded"] // age if age > 0 else 0
 
@@ -265,11 +265,11 @@ def main():
     api_url = os.environ["QBT_API_URL"]
     completed_dir = os.environ["COMPLETED_DIR"]
     import_base = os.environ["IMPORT_BASE"]
-    min_seeding_days = int(os.environ["MIN_SEEDING_DAYS"])
+    min_seeding_hours = int(os.environ["MIN_SEEDING_HOURS"])
     min_avg_rate = int(os.environ["MIN_AVG_RATE"])
     categories = parse_categories(os.environ["CATEGORIES"])
 
-    min_age = min_seeding_days * 86400
+    min_age = min_seeding_hours * 3600
     now = int(time.time())
 
     torrents = fetch_torrents(api_url)
@@ -277,8 +277,10 @@ def main():
         print("Skipping cleanup")
         sys.exit(0)
 
-    category_dirs = {f"{completed_dir}/{subdir}" for subdir in categories.values()}
-    import_dirs = [f"{import_base}/{subdir}" for subdir in categories.values()]
+    # Deduplicate subdirs — multiple categories can map to the same subdir
+    subdirs = sorted(set(categories.values()))
+    category_dirs = {f"{completed_dir}/{subdir}" for subdir in subdirs}
+    import_dirs = [f"{import_base}/{subdir}" for subdir in subdirs]
 
     stats = {"cleaned": 0, "seeding": 0, "skipped": 0}
 
@@ -294,7 +296,7 @@ def main():
         category_dirs,
         stats,
     )
-    for subdir in categories.values():
+    for subdir in subdirs:
         scan_dir(
             f"{completed_dir}/{subdir}",
             torrents,

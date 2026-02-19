@@ -385,9 +385,20 @@ The `media` user and group are defined in `jellyfin.nix`.
 ### qBittorrent Category System
 
 Downloads are organized by category into subdirectories under `completed/`:
-- `tv-sonarr` category → `completed/tv/` → hard linked to `/media/arr/tv/` → B2 `tv/`
-- `radarr` category → `completed/movies/` → hard linked to `/media/arr/movies/` → B2 `movies/`
+- `tv-sonarr` category → `completed/tv/` → hard linked by Sonarr to `/media/arr/tv/` → B2 `tv/`
+- `radarr` category → `completed/movies/` → hard linked by Radarr to `/media/arr/movies/` → B2 `movies/`
+- `tv` category → `completed/tv/` → hard linked by upload script to `/media/arr/tv/` → B2 `tv/`
+- `movie` category → `completed/movies/` → hard linked by upload script to `/media/arr/movies/` → B2 `movies/`
 - Uncategorized → `completed/` → B2 `downloads/`
+
+The `tv` and `movie` categories are for manually added torrents. The upload
+script detects manual items (all files have `st_nlink == 1`, meaning
+Sonarr/Radarr haven't touched them) and creates hard links to the import
+directory. Arr-managed items (`st_nlink > 1`) are skipped.
+
+After uploading, the upload script propagates `.uploaded` markers from the
+import directory back to `completed/` items (by inode match), so the cleanup
+timer can eventually remove them.
 
 Categories are defined in the `categories` attrset in `qbittorrent/default.nix` and
 registered via the qBittorrent API by `qbt-categories.service` on boot.
@@ -420,9 +431,13 @@ stdlib. Run `just test` to execute the pytest suite locally.
 1. Add an entry to the `categories` attrset in `qbittorrent/default.nix`:
    `"category-name" = "subdirectory";`
 2. Everything else is derived automatically: tmpfiles rules, upload scan
-   commands, cleanup scan commands, import directories, and B2 upload paths.
-3. In the *arr app, set the Category field when configuring the download client
-   and set the root folder to `/media/arr/<subdirectory>`.
+   commands, cleanup scan commands, import directories, hard linking, marker
+   propagation, and B2 upload paths.
+3. For *arr categories: set the Category field when configuring the download
+   client and set the root folder to `/media/arr/<subdirectory>`.
+4. For manual categories: assign the category in qBittorrent when adding a
+   torrent. The upload script will hard link files to `/media/arr/<subdirectory>/`
+   and handle B2 upload automatically.
 
 ### Servarr Apps (Sonarr, Radarr, Prowlarr)
 

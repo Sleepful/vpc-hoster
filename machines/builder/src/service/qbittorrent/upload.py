@@ -1,8 +1,12 @@
 """Upload completed qBittorrent downloads to Backblaze B2.
 
-Primary: scans import directories (/media/arr/tv/, /media/arr/movies/) for
-files with nice names from Sonarr/Radarr.
-Fallback: scans completed/ for uncategorized downloads (torrent names).
+1. Link: hard links manual category items from completed/<subdir>/ to
+   /media/arr/<subdir>/ (items where all files have st_nlink == 1, meaning
+   Sonarr/Radarr haven't touched them).
+2. Upload: scans import directories (/media/arr/tv/, /media/arr/movies/) for
+   files to upload. Falls back to completed/ for uncategorized downloads.
+3. Propagate: copies .uploaded markers from import dirs back to completed/
+   items (by inode match), so the cleanup timer can eventually remove them.
 
 Triggered by qbt-upload-b2.timer every 2 minutes.
 
@@ -205,6 +209,119 @@ def scan_completed_dir(directory, b2_base, b2_remote, extracted_dir, category_di
         process_item(item, b2_base, b2_remote, extracted_dir)
 
 
+def needs_linking(item):
+    """Check if a completed item needs hard linking to import dir.
+
+    Returns True if all files have link count 1 (no hard links exist).
+    Sonarr/Radarr-managed items will have link count > 1 because they
+    create hard links into the import directory.
+    """
+    item = Path(item)
+    if item.is_file():
+        return os.stat(item).st_nlink == 1
+    for f in item.rglob("*"):
+        if f.is_file() and os.stat(f).st_nlink > 1:
+            return False
+    return True
+
+
+def link_to_import_dir(completed_dir, import_base, subdirs):
+    """Hard link manual category items to import directories.
+
+    Scans completed/<subdir>/ for items where all files have st_nlink == 1
+    (manual downloads, not yet linked by Sonarr/Radarr). Creates hard links
+    in /media/arr/<subdir>/ preserving directory structure.
+    """
+    for subdir in subdirs:
+        src_dir = Path(completed_dir) / subdir
+        dst_dir = Path(import_base) / subdir
+        if not src_dir.exists():
+            continue
+
+        for item in sorted(src_dir.iterdir()):
+            if item.name.endswith(".uploaded"):
+                continue
+            if Path(f"{item}.uploaded").exists():
+                continue
+            if not needs_linking(item):
+                continue
+
+            if item.is_file():
+                dst = dst_dir / item.name
+                if not dst.exists():
+                    os.link(item, dst)
+                    print(f"Linked: {item.name} -> {dst}")
+            elif item.is_dir():
+                for f in item.rglob("*"):
+                    if not f.is_file():
+                        continue
+                    rel = f.relative_to(item)
+                    dst = dst_dir / item.name / rel
+                    if not dst.exists():
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        os.link(f, dst)
+                print(f"Linked: {item.name}/ -> {dst_dir / item.name}/")
+
+
+def propagate_markers(completed_dir, import_base, subdirs):
+    """Propagate .uploaded markers from import dirs to completed/ items.
+
+    For each item in completed/<subdir>/ without an .uploaded marker,
+    collects file inodes and checks if those inodes have .uploaded markers
+    in the import dir. If all do, marks the completed item as uploaded.
+
+    This works for both arr-managed items (different names in import dir,
+    same inodes) and manual items (same names, same inodes).
+    """
+    for subdir in subdirs:
+        src_dir = Path(completed_dir) / subdir
+        import_dir = Path(import_base) / subdir
+        if not src_dir.exists() or not import_dir.exists():
+            continue
+
+        # Build a set of inodes that have .uploaded markers in the import dir
+        uploaded_inodes = set()
+        for marker in import_dir.rglob("*.uploaded"):
+            source = marker.with_suffix("")
+            if source.exists() and source.is_file():
+                try:
+                    uploaded_inodes.add(os.stat(source).st_ino)
+                except OSError:
+                    continue
+
+        if not uploaded_inodes:
+            continue
+
+        for item in sorted(src_dir.iterdir()):
+            if item.name.endswith(".uploaded"):
+                continue
+            if Path(f"{item}.uploaded").exists():
+                continue
+
+            # Collect inodes for this completed item
+            item_inodes = set()
+            if item.is_file():
+                try:
+                    item_inodes.add(os.stat(item).st_ino)
+                except OSError:
+                    continue
+            elif item.is_dir():
+                for f in item.rglob("*"):
+                    if f.is_file():
+                        try:
+                            item_inodes.add(os.stat(f).st_ino)
+                        except OSError:
+                            continue
+
+            if not item_inodes:
+                continue
+
+            # All file inodes must have .uploaded markers in import dir
+            if item_inodes.issubset(uploaded_inodes):
+                mark_uploaded(item)
+                print(f"Propagated marker: {item.name}")
+
+
 def main():
     completed_dir = os.environ["COMPLETED_DIR"]
     extracted_dir = os.environ["EXTRACTED_DIR"]
@@ -212,10 +329,16 @@ def main():
     b2_remote = os.environ["B2_REMOTE"]
     categories = parse_categories(os.environ["CATEGORIES"])
 
-    category_dirs = {f"{completed_dir}/{subdir}" for subdir in categories.values()}
+    # Deduplicate subdirs — multiple categories can map to the same subdir
+    # (e.g. tv-sonarr and tv both map to "tv")
+    subdirs = sorted(set(categories.values()))
+    category_dirs = {f"{completed_dir}/{subdir}" for subdir in subdirs}
 
-    # Primary: scan import directories (nice names from Sonarr/Radarr)
-    for subdir in categories.values():
+    # Step 1: hard link manual category items to import dirs
+    link_to_import_dir(completed_dir, import_base, subdirs)
+
+    # Step 2: upload from import directories (nice names from *arr + manual links)
+    for subdir in subdirs:
         scan_import_dir(
             f"{import_base}/{subdir}",
             f"{subdir}/",
@@ -223,7 +346,7 @@ def main():
             extracted_dir,
         )
 
-    # Fallback: scan uncategorized downloads (torrent names)
+    # Step 3: upload uncategorized downloads (torrent names)
     scan_completed_dir(
         completed_dir,
         "downloads/",
@@ -231,6 +354,9 @@ def main():
         extracted_dir,
         category_dirs,
     )
+
+    # Step 4: propagate .uploaded markers from import dirs to completed/ items
+    propagate_markers(completed_dir, import_base, subdirs)
 
 
 if __name__ == "__main__":

@@ -196,7 +196,7 @@ class TestShouldKeepSeeding:
             torrent, now, min_age=10 * 86400, min_avg_rate=2048
         )
         assert keep is True
-        assert "days left" in reason
+        assert "h left" in reason
 
     def test_active_upload(self):
         now = 1_000_000

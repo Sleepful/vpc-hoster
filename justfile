@@ -7,7 +7,7 @@ delete:
 	ssh {{NAME}} "rm -rf {{REMOTE}}/*"
 
 copy:
-	rsync -av --exclude='.git/' --exclude='.jj/' . {{NAME}}:{{REMOTE}}
+	rsync -av --exclude='.git/' --exclude='.jj/' --exclude='node_modules/' . {{NAME}}:{{REMOTE}}
 
 sync: delete copy
 
