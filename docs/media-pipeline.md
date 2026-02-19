@@ -7,12 +7,12 @@ All services run on the **builder** machine.
 ## Flow
 
 ```
-Sonarr/Prowlarr      qBittorrent          rclone FUSE mount        Jellyfin / Copyparty
----------------      -----------          ----------------         --------------------
+Sonarr/Radarr/Prowlarr  qBittorrent          rclone FUSE mount        Jellyfin / Copyparty
+----------------------  -----------          ----------------         --------------------
 
- Search series
+ Search series/movies
      |
-     | finds episodes via indexers (Prowlarr)
+     | finds episodes/movies via indexers (Prowlarr)
      | sends torrent to qBittorrent
      v
                      Add torrent
@@ -20,13 +20,19 @@ Sonarr/Prowlarr      qBittorrent          rclone FUSE mount        Jellyfin / Co
                          v
                      downloading/        (in-progress pieces)
                          |
-                         | completion
+                         | completion (sorted by category)
                          v
-                     completed/  ------> qbt-upload-b2.service
+                     completed/          (uncategorized)
+                     completed/tv/       (Sonarr → tv-sonarr)
+                     completed/movies/   (Radarr → radarr)
+                         |
+                         +-------------> qbt-upload-b2.service
                          |                    |
                          | seeding            | extract archives (zip/rar)
-                         | (7 days)           | upload extracted to B2
-                         |                    | upload original to B2
+                         | (7 days)           | upload to matching B2 path:
+                         |                    |   downloads/
+                         |                    |   downloads/tv/
+                         |                    |   downloads/movies/
                          |                    | mark .uploaded
                          |                    v
                          |               b2:entertainment-netmount/downloads/
@@ -59,26 +65,32 @@ All services are accessible from the nginx dashboard at `http://builder/` (port 
 | Copyparty | 3923 | `/files/` | File browser / WebDAV |
 | rclone RC / Web GUI | 5572 | `/rclone/` | B2 mount cache stats, prefetch, transfer monitoring |
 | Sonarr | 8989 | `/sonarr/` | TV series search and download manager |
-| Prowlarr | 9696 | `/prowlarr/` | Indexer manager for Sonarr |
+| Radarr | 7878 | `/radarr/` | Movie search and download manager |
+| Prowlarr | 9696 | `/prowlarr/` | Indexer manager for Sonarr/Radarr |
 
 ## Directories on builder
 
 | Path | Purpose |
 |------|---------|
 | `/var/lib/qBittorrent/downloading` | In-progress downloads (TempPath) |
-| `/var/lib/qBittorrent/completed` | Finished downloads, seeding here |
+| `/var/lib/qBittorrent/completed` | Finished downloads, seeding here (uncategorized) |
+| `/var/lib/qBittorrent/completed/tv` | TV series from Sonarr (`tv-sonarr` category) |
+| `/var/lib/qBittorrent/completed/movies` | Movies from Radarr (`radarr` category) |
 | `/var/lib/qBittorrent/extracted` | Temporary archive extraction (ephemeral) |
 | `/media/b2` | rclone FUSE mount of `b2:entertainment-netmount` |
-| `/media/b2/downloads` | Where uploaded media lands on B2 |
+| `/media/b2/downloads` | Uncategorized uploads |
+| `/media/b2/downloads/tv` | TV series uploads |
+| `/media/b2/downloads/movies` | Movie uploads |
 
 ## Systemd units
 
 | Unit | Type | Trigger | What it does |
 |------|------|---------|--------------|
-| `qbt-upload-b2.path` | path | `completed/` becomes non-empty | Starts the upload service |
-| `qbt-upload-b2.service` | oneshot | Path unit or boot | Extracts archives, uploads to B2, marks `.uploaded` |
+| `qbt-upload-b2.timer` | timer | Every 2 min (1 min after boot) | Starts the upload service |
+| `qbt-upload-b2.service` | oneshot | Timer | Extracts archives, uploads to B2, marks `.uploaded` |
+| `qbt-categories.service` | oneshot | Boot (after qBittorrent) | Creates download categories via API |
 | `qbt-cleanup.timer` | timer | Every 10 min (5 min after boot) | Starts the cleanup service |
-| `qbt-cleanup.service` | oneshot | Timer | Deletes orphaned files no longer tracked by qBittorrent |
+| `qbt-cleanup.service` | oneshot | Timer | Removes torrents after seeding period, deletes local files |
 | `rclone-b2-mount.service` | notify | Boot | Mounts B2 bucket at `/media/b2` |
 
 ## Upload details
@@ -86,7 +98,7 @@ All services are accessible from the nginx dashboard at `http://builder/` (port 
 - Archives (`.zip`, `.rar`) are extracted using `unar` to a temporary directory, uploaded, then the extracted copy is deleted immediately. The original archive stays for seeding.
 - `rclone copy` uses `--checksum` to verify integrity and `--stats 30s` for progress logging.
 - A `.uploaded` marker file is created next to each item after a successful upload. Subsequent runs skip marked items.
-- On failure, the service logs the error, skips to the next item, and retries after 30 seconds (`Restart=on-failure`).
+- On failure, the service logs the error and skips to the next item. The timer retries in 2 minutes.
 
 ## Cleanup details
 
@@ -188,6 +200,7 @@ In the worst case (playing a file while it's still seeding), the same file exist
 - `machines/builder/src/service/copyparty.nix` — file browser / WebDAV
 - `machines/builder/src/service/secrets.nix` — B2 credentials (SOPS/age)
 - `machines/builder/src/service/sonarr.nix` — TV series search and download
+- `machines/builder/src/service/radarr.nix` — movie search and download
 - `machines/builder/src/service/prowlarr.nix` — indexer manager
 
 ## Setup Sonarr/Prowlarr
@@ -210,6 +223,12 @@ After deploying, configure both services through their web UIs:
    - API Key: copy from Sonarr (Settings > General > API Key)
    - Sync Level: Full Sync
    - Test and save. Prowlarr will push your indexers to Sonarr automatically.
+4. Add Radarr as an application: Settings > Apps > Add > Radarr.
+   - Prowlarr Server: `http://localhost:9696`
+   - Radarr Server: `http://localhost:7878`
+   - API Key: copy from Radarr (Settings > General > API Key)
+   - Sync Level: Full Sync
+   - Test and save.
 
 ### 2. Sonarr (`http://builder:8989`)
 
@@ -217,19 +236,47 @@ After deploying, configure both services through their web UIs:
 2. Add qBittorrent as a download client: Settings > Download Clients > Add > qBittorrent.
    - Host: `localhost`
    - Port: `8080`
+   - Category: `tv-sonarr` (downloads will land in `completed/tv/` and upload to `downloads/tv/` on B2)
    - Leave username/password blank if qBittorrent doesn't require auth from localhost.
    - Test and save.
 3. Disable completed download handling so the B2 pipeline manages files:
    Settings > Download Clients > Completed Download Handling > uncheck "Remove".
-4. Set a root folder when prompted (e.g. `/var/lib/qBittorrent/completed`). Sonarr
+4. Set a root folder when prompted (e.g. `/var/lib/qBittorrent/completed/tv`). Sonarr
    requires one to track series, but it won't move files there in search-only mode.
 
-### 3. Download a series
+### 3. Radarr (`http://builder:7878`)
+
+1. Set an authentication method (Settings > General > Authentication).
+2. Add qBittorrent as a download client: Settings > Download Clients > Add > qBittorrent.
+   - Host: `localhost`
+   - Port: `8080`
+   - Category: `radarr` (downloads will land in `completed/movies/` and upload to `downloads/movies/` on B2)
+   - Leave username/password blank if qBittorrent doesn't require auth from localhost.
+   - Test and save.
+3. Disable completed download handling so the B2 pipeline manages files:
+   Settings > Download Clients > Completed Download Handling > uncheck "Remove".
+4. Set a root folder when prompted (e.g. `/var/lib/qBittorrent/completed/movies`). Radarr
+   requires one to track movies, but it won't move files there in search-only mode.
+
+### 4. Download a series (Sonarr)
 
 1. Series > Add New > search by name.
 2. Select the series, pick a quality profile, and set the root folder.
 3. On the series page, select the episodes or seasons you want.
 4. Click "Search Selected" — Sonarr queries your indexers via Prowlarr, picks the
    best match, and sends the torrent to qBittorrent.
-5. qBittorrent downloads to `downloading/`, moves to `completed/` on finish, and
-   the existing `qbt-upload-b2` pipeline uploads to B2 as usual.
+5. qBittorrent downloads to `downloading/`, moves to `completed/tv/` on finish
+   (because of the `tv-sonarr` category), and the upload pipeline sends it to
+   `downloads/tv/` on B2.
+
+### 5. Download a movie (Radarr)
+
+1. Movies > Add New > search by name.
+2. Select the movie, pick a quality profile, and set the root folder.
+3. Click "Add Movie" then search for it, or toggle "Start search for missing movie"
+   when adding.
+4. Radarr queries your indexers via Prowlarr, picks the best match, and sends the
+   torrent to qBittorrent.
+5. qBittorrent downloads to `downloading/`, moves to `completed/movies/` on finish
+   (because of the `radarr` category), and the upload pipeline sends it to
+   `downloads/movies/` on B2.

@@ -30,5 +30,6 @@ in
     ./service/qbittorrent.nix
     ./service/prowlarr.nix
     ./service/sonarr.nix
+    ./service/radarr.nix
   ];
 }

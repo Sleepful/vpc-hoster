@@ -28,6 +28,7 @@ let
         <li><a href="/qbt/">qbittorrent</a> <span class="desc">- torrent client</span></li>
         <li><a href="/rclone/">rclone</a> <span class="desc">- b2 mount / cache stats</span></li>
         <li><a href="/sonarr/">sonarr</a> <span class="desc">- tv series search / download</span></li>
+        <li><a href="/radarr/">radarr</a> <span class="desc">- movie search / download</span></li>
         <li><a href="/prowlarr/">prowlarr</a> <span class="desc">- indexer manager</span></li>
       </ul>
     </body>
@@ -79,7 +80,12 @@ in
         return = "302 http://$host:8989/";
       };
 
-      # Prowlarr — indexer manager for Sonarr
+      # Radarr — movie search and download manager
+      locations."/radarr/" = {
+        return = "302 http://$host:7878/";
+      };
+
+      # Prowlarr — indexer manager for Sonarr/Radarr
       locations."/prowlarr/" = {
         return = "302 http://$host:9696/";
       };

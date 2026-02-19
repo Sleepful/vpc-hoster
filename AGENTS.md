@@ -23,86 +23,204 @@ flake.nix                          # Flake entry point — declares inputs + nix
 flake.lock                         # Pinned nixpkgs revision (generated)
 justfile                           # Deployment automation (just)
 .sops.yaml                         # Secrets encryption config (age key)
-shared/
-  base.nix                         # Common config shared by all machines (flakes, journald, tree)
+.gitmodules                        # Declares the private submodule
+private/                           # Git submodule — real identifiers (domains, IPs, keys)
   identifiers/
-    default.nix                    # Shared identifier values (domains, addresses, etc.)
-  options/
-    identifiers.nix                # Custom option declarations for identifiers
-machines/
+    default.nix                    # Overrides shared/identifiers placeholder values
+secrets/
   builder/
-    configuration.nix              # NixOS root entry point — imports src/config.nix
-    src/
-      config.nix                   # Machine-specific config (hostname) + import hub
-      service/                     # Network/infra services (tailscale, jellyfin, syncthing, etc.)
-      backend/                     # Application backends (pocketbase, postgraphile)
-      database/                    # Database engines (pg, mysql, sqlite)
+    core.yaml                      # SOPS-encrypted secrets for builder
   house/
-    configuration.nix              # NixOS root entry point — imports src/config.nix
+    core.yaml                      # SOPS-encrypted secrets for house
+scripts/
+  bootstrap-deploy-key.sh          # Sets up SSH deploy key on a target machine
+docs/                              # Architecture docs (e.g., media-pipeline.md)
+shared/
+  base.nix                         # Common config shared by all machines
+  options/
+    identifiers.nix                # Custom option declarations (mkOption) for identifiers
+  identifiers/
+    default.nix                    # Placeholder identifier values (overridden by private/)
+machines/
+  <machine>/
+    configuration.nix              # NixOS root entry point
+    hardware-configuration.nix     # Hardware scan output (builder, house only)
     src/
-      config.nix                   # Machine-specific config (hostname) + import hub
-      service/                     # Mail, monitoring, miniflux, outline, frp, etc.
-      data/                        # Static data files (loki, promtail configs)
-  hoster/
-    configuration.nix              # NixOS root entry point — imports src/config.nix
-    src/
-      config.nix                   # Machine-specific config (hostname) + import hub
+      config.nix                   # Machine-specific config + import hub for services
+      service/                     # One .nix file per service
+      backend/                     # Application backends (builder only)
+      database/                    # Database engines (builder only)
+      data/                        # Static data files (house only)
 ```
 
-Module import chain: `flake.nix` -> `machines/<machine>/configuration.nix` ->
-`shared/base.nix` + `src/config.nix` -> `src/service/*.nix`.
-Not all modules under `src/` are wired into the import chain — some are placeholders or
-reference material (e.g., `postgraphile.nix` is comments only, `mysql.nix` and
+### Module Import Chain
+
+`flake.nix` -> `machines/<machine>/configuration.nix` -> `shared/base.nix` +
+`src/config.nix` -> `src/service/*.nix`.
+
+Note: builder uses an extra `imports.nix` shim between `configuration.nix` and the
+rest (historical artifact from bootstrap). House and hoster import directly.
+
+Not all files under `src/` are wired into the import chain — some are placeholders
+or reference material (e.g., `postgraphile.nix` is comments only, `mysql.nix` and
 `sqlite.nix` are empty).
+
+### Identifiers System (Private Overlay)
+
+Shared configuration values (domains, IPs, SSH keys, email addresses, subdomains)
+are managed through a three-layer system:
+
+1. **Option declarations** — `shared/options/identifiers.nix` defines
+   `homelab.identifiers.*` options using `mkOption`.
+2. **Placeholder defaults** — `shared/identifiers/default.nix` provides
+   `lib.mkDefault` placeholder values (e.g., `example.com`).
+3. **Private overrides** — `private/identifiers/default.nix` (git submodule)
+   provides real values. Loaded conditionally via `lib.optional
+   (builtins.pathExists ...)` in `shared/base.nix`.
+
+Access identifiers in modules via:
+```nix
+{ config, ... }:
+let ids = config.homelab.identifiers; in
+{
+  # ids.domain.root, ids.hosts.house.ipv4, ids.subdomains.grafana, etc.
+}
+```
+
+**Gotcha:** The repo builds and evaluates even without the `private/` submodule
+(placeholders are valid Nix). But deployed machines will have dummy values.
+Always ensure the submodule is initialized: `git submodule update --init`.
+
+### Secrets Organization
+
+Secrets use SOPS with age encryption. Per-machine encrypted files live in
+`secrets/<machine>/core.yaml`. Each machine has a dedicated `src/service/secrets.nix`
+that:
+- Sets `sops.defaultSopsFile` pointing to the machine's `core.yaml`
+- Configures `sops.age.sshKeyPaths` (machine's SSH host key decrypts at boot)
+- Declares individual `sops.secrets.*` entries
+- Defines `sops.templates.*` for composed secret files (env files, configs)
+
+`.sops.yaml` at the repo root lists the age public keys for all machines and the
+macOS workstation, so any of them can encrypt/decrypt.
 
 ## Build / Deploy / Test Commands
 
-This project uses `just` as its task runner. All commands are defined in `justfile`.
-Configuration is edited on macOS, rsynced to the builder machine, and rebuilt there
-using Nix flakes.
+All commands are defined in `justfile`. Configuration is edited on macOS, rsynced
+to the builder machine, and rebuilt there.
+
+### Core Deployment
 
 ```sh
-# Deploy builder (default) — rsync + nixos-rebuild switch
-just deploy
-
-# Deploy a specific machine (builder rebuilds itself)
-just deploy builder
-
-# Deploy a remote machine (builder builds and pushes to it via SSH)
-just deploy-remote hoster
-
-# Individual steps:
-just delete          # SSH rm -rf /etc/nixos/* on builder
-just copy            # rsync entire repo to builder:/etc/nixos
-just sync            # delete + copy
-
-# Validate flake evaluation without building:
-just check           # checks builder (default)
-just check hoster    # checks hoster
-
-# Local syntax check (macOS, no SSH):
-just syntax          # or: just s
-
-# Edit an encrypted secret file with SOPS:
-just secret <filename>
+just deploy                  # Deploy builder — rsync + nixos-rebuild switch
+just deploy-remote house     # Deploy house — builder builds and pushes via SSH
+just check                   # Validate flake eval (builder, default)
+just check house             # Validate flake eval for house
+just syntax                  # Local syntax check (macOS, no SSH). Alias: just s
 ```
 
-The builder machine is the build server — all `nixos-rebuild` commands run there.
-The `copy` recipe rsyncs the entire repo (excluding `.git/` and `.jj/`) to
-`/etc/nixos` on builder. For remote machines like hoster, builder uses
-`--target-host` to push the built closure over SSH (no rsync to hoster needed).
+### Flake & Store Maintenance
+
+```sh
+just lock                    # Update flake lockfile (nix flake update nixpkgs)
+just gc                      # Garbage-collect builder's Nix store
+just gc house                # Garbage-collect house's Nix store
+just disk                    # Show builder disk/inode usage
+```
+
+### Secrets
+
+```sh
+just secret secrets/house/core.yaml    # Edit encrypted secrets file
+just age-key                           # Derive age public key from machine SSH host key
+just hash-bcrypt                       # Generate bcrypt hash locally
+just hash-bcrypt-house                 # Generate bcrypt hash on house
+```
+
+### Bootstrap Recipes
+
+```sh
+just bootstrap                              # Pull config from a fresh builder install
+just deploy-remote-bootstrap house          # First deploy when deploy user doesn't exist
+just deploy-remote-to house 1.2.3.4         # Deploy to explicit IP
+just bootstrap-key house 1.2.3.4            # Set up deploy SSH key on target
+just bootstrap-key-root house 1.2.3.4       # Bootstrap key as root (first time)
+```
+
+### Local Deploy (No Builder Hop)
+
+```sh
+just check-local house                       # Evaluate config locally
+just deploy-local-house                      # Deploy house from macOS directly
+just deploy-local-house-bootstrap root@house # Bootstrap deploy from macOS
+```
+
+### Submodule (private/)
+
+```sh
+just submodule-status           # Show uncommitted changes in private/
+just submodule-diff             # Show diff in private/
+just submodule-commit-all "msg" # Stage all, commit, push private/
+```
 
 ### Testing
 
 There is no automated test suite. Testing is manual:
 1. Make changes locally.
-2. Deploy to a local NixOS VM (`just deploy`).
-3. Verify the service works.
-4. If it works, deploy to the production remote.
+2. Run `just syntax` for quick local syntax check.
+3. Deploy to builder VM (`just deploy`).
+4. Verify the service works.
+5. If it works, deploy to the production remote (`just deploy-remote house`).
 
-A successful `nixos-rebuild switch` (the `just deploy` step) is the primary
-validation — NixOS module evaluation catches type errors, missing attributes,
-and invalid option values at build time.
+A successful `nixos-rebuild switch` is the primary validation — NixOS module
+evaluation catches type errors, missing attributes, and invalid option values
+at build time.
+
+## Procedures
+
+### Adding a New Service to an Existing Machine
+
+1. Create `machines/<machine>/src/service/<servicename>.nix` using the standard
+   module pattern.
+2. Add the import to `machines/<machine>/src/config.nix` in the `imports` list.
+3. If the service needs secrets, add `sops.secrets.*` entries to
+   `machines/<machine>/src/service/secrets.nix`, and add the key to
+   `secrets/<machine>/core.yaml` via `just secret secrets/<machine>/core.yaml`.
+4. If the service needs a subdomain (house only):
+   - Add the subdomain to `shared/options/identifiers.nix` (mkOption).
+   - Add a placeholder default in `shared/identifiers/default.nix`.
+   - Add the real value in `private/identifiers/default.nix`.
+   - Add the subdomain to the ACME `extraDomainNames` list in
+     `machines/house/src/service/web.nix`.
+   - Add an nginx virtualHost in `web.nix`.
+5. If the service runs on builder and has a web UI, add a dashboard link and
+   redirect in `machines/builder/src/service/web.nix`.
+6. If the service needs a firewall port, add it to the service file or the
+   machine's firewall config.
+7. Deploy and verify: `just deploy` (builder) or `just deploy-remote house`.
+
+### Adding a New Machine
+
+1. Add a `nixosConfigurations.<name>` entry in `flake.nix` with the appropriate
+   modules list (include `sops-nix.nixosModules.sops`).
+2. Create `machines/<name>/configuration.nix` importing `shared/base.nix` and
+   `./src/config.nix`.
+3. Create `machines/<name>/src/config.nix` with hostname, stateVersion, and
+   imports list.
+4. If the machine needs secrets, create `secrets/<name>/core.yaml` and a
+   `src/service/secrets.nix`.
+5. Add the machine's age public key to `.sops.yaml` and re-encrypt.
+6. Add justfile recipes if the machine has a non-standard deploy path.
+
+### Adding a New Secret
+
+1. Declare the secret in `machines/<machine>/src/service/secrets.nix`:
+   `sops.secrets.<key> = {};` (add `owner`, `restartUnits` as needed).
+2. If the secret is consumed as an environment variable or config file, create
+   a `sops.templates.<name>` using `config.sops.placeholder.<key>`.
+3. Add the actual value: `just secret secrets/<machine>/core.yaml`.
+4. Reference in service files as `config.sops.secrets.<key>.path` (file path)
+   or use the template path.
 
 ## Code Style Guidelines
 
@@ -129,7 +247,7 @@ Every `.nix` file follows the standard NixOS module pattern:
 }
 ```
 
-- Only destructure the arguments you actually use (`config`, `pkgs`,
+- Only destructure the arguments you actually use (`config`, `pkgs`, `lib`,
   `modulesPath`, etc.). Use `...` to ignore the rest.
 - Opening brace for the returned attrset goes on the same line as the function
   signature or the next line — either is acceptable, but same-line is more common
@@ -192,20 +310,22 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 - This project uses **Nix flakes**. `flake.nix` at the repo root declares
   all inputs (pinned nixpkgs) and all `nixosConfigurations`.
 - Shared configuration lives in `shared/base.nix` and is imported by each
-  machine's `src/config.nix`.
-- No custom NixOS module options (`mkOption`) are defined — modules only
-  consume upstream options via direct attribute assignment.
-- No `let ... in` bindings, overlays, or custom packages are used currently.
-  Keep things simple; only introduce these when genuinely needed.
-- No `lib` usage currently. If needed, add `lib` to the module argument
-  destructuring: `{ lib, config, pkgs, ... }:`.
+  machine's `configuration.nix` or `imports.nix`.
+- Custom NixOS module options are defined in `shared/options/identifiers.nix`
+  for the identifier system. Service modules consume upstream options via
+  direct attribute assignment.
+- `let ... in` bindings are used where helpful (extracting `ids`, `sub`,
+  helper functions like `fqdn`). No overlays or custom packages currently.
+- `lib` is used in the identifiers modules (`lib.mkDefault`, `lib.mkOption`,
+  `lib.optional`). Add `lib` to the module argument destructuring when needed.
 
 ### Justfile Conventions
 
 - Variables use SCREAMING_CASE: `NAME`, `SOPS_KEY`, `REMOTE`.
-- Recipe names use lowercase: `delete`, `copy`, `sync`, `deploy`, `check`.
+- Recipe names use lowercase with hyphens for multi-word names:
+  `deploy-remote`, `bootstrap-key`, `check-local`.
 - Recipes with parameters use lowercase for parameter names: `secret filename`,
-  `deploy machine`.
+  `deploy-remote machine`.
 
 ### Error Handling
 
@@ -224,7 +344,117 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 
 ### Commit Messages
 
-- Sentence-case, starting with a verb: "Adds tailscale", "adds databases
-  and justfile".
+- Sentence-case, starting with a verb: "Adds tailscale", "Fixes rclone config".
 - No conventional-commits prefix (no `feat:`, `fix:`, etc.).
 - Keep messages short and descriptive.
+
+## Media Pipeline (Builder)
+
+The builder runs a media download pipeline documented in `docs/media-pipeline.md`.
+Key services: qBittorrent, Sonarr, Radarr, Prowlarr, rclone B2 mount, Jellyfin.
+
+### qBittorrent Category System
+
+Downloads are organized by category into subdirectories under `completed/`:
+- `tv-sonarr` category → `completed/tv/` → `b2:.../downloads/tv/`
+- `radarr` category → `completed/movies/` → `b2:.../downloads/movies/`
+- Uncategorized → `completed/` → `b2:.../downloads/`
+
+Categories are defined in the `categories` attrset in `qbittorrent.nix` and
+registered via the qBittorrent API by `qbt-categories.service` on boot.
+
+### Adding a New Download Category
+
+1. Add an entry to the `categories` attrset in `qbittorrent.nix`:
+   `"category-name" = "subdirectory";`
+2. Everything else is derived automatically: tmpfiles rules, upload scan
+   commands, cleanup scan commands, and B2 upload paths.
+3. In the *arr app, set the Category field when configuring the download client.
+
+### Servarr Apps (Sonarr, Radarr, Prowlarr)
+
+- NixOS modules only configure server-level settings (port, update mechanism)
+  via environment variables (`APPNAME__SECTION__KEY`).
+- Application-level config (download clients, indexers, root folders, quality
+  profiles) is stored in SQLite and must be configured through the web UI.
+- Sonarr/Radarr support `user`/`group` options — use the shared `media` user.
+- Prowlarr uses `DynamicUser = true` and does not accept custom user/group.
+
+### Nix String Interpolation in Shell Scripts
+
+When generating shell commands from Nix attrsets (e.g., `builtins.mapAttrs`),
+avoid nesting `'' ''` multiline strings inside a `script = '' ... '';` block —
+this causes parse errors. Instead, hoist the generated strings into `let`
+bindings and interpolate the binding name:
+
+```nix
+# Bad — nested '' strings cause parser confusion
+script = ''
+  ${builtins.concatStringsSep "\n" (builtins.mapAttrs (n: v: ''
+    echo "${n}"
+  '') attrs)}
+'';
+
+# Good — pre-compute in let, interpolate the variable
+script = let
+  cmds = builtins.concatStringsSep "\n" (builtins.mapAttrs (n: v:
+    "echo \"${n}\""
+  ) attrs);
+in ''
+  ${cmds}
+'';
+```
+
+### Validation Levels
+
+- `just syntax` — fast local check (`nix-instantiate --eval`), catches syntax
+  errors but NOT option/type errors. Does not SSH anywhere.
+- `just check` — full flake evaluation on builder via SSH. Catches option
+  mismatches, missing attributes, type errors. Always run before deploying.
+- `just deploy` — builds and switches. The ultimate validation.
+
+### Systemd Design Patterns
+
+- **Timer over path unit when files persist:** `DirectoryNotEmpty` re-triggers
+  every time the service exits if the directory is still non-empty. Only use
+  path units when the service empties the watched directory. If files stay
+  (e.g., seeding downloads with `.uploaded` markers), use a timer instead.
+- **Avoid multiple path units triggering the same service:** Simultaneous
+  activation on boot hits systemd's default rate limit (5 starts in 10s).
+  Prefer a single path unit with multiple `DirectoryNotEmpty` directives
+  (NixOS `pathConfig` accepts a list), or use a timer.
+- **Rate limit state survives `switch-to-configuration`:** If a unit hits
+  `start-limit-hit`, `nixos-rebuild switch` does NOT reset the counter for
+  unchanged units. Run `systemctl reset-failed <unit>` on the target machine
+  before redeploying, or change the unit definition so NixOS regenerates it.
+
+## Gotchas and Non-Obvious Requirements
+
+- **`path:` prefix in flake references:** On builder, flake commands use
+  `path:/etc/nixos#machine` not `.#machine`, because the code is rsynced to
+  `/etc/nixos` — it's not a git repo there, so `path:` is required.
+- **Private submodule must be initialized:** `git submodule update --init`.
+  Without it the build still succeeds but uses placeholder identifiers.
+- **Private submodule has its own git history:** Changes to `private/` must be
+  committed and pushed separately. Use `just submodule-commit-all "msg"` or
+  commit manually in `private/`.
+- **SOPS re-encryption after key changes:** If you add a new machine's age key
+  to `.sops.yaml`, you must re-encrypt all secret files so the new key can
+  decrypt them: `just secret secrets/<machine>/core.yaml` (save without changes
+  to re-encrypt with updated keys).
+- **`system.stateVersion` must not change:** Each machine's `stateVersion` is
+  set at first install. Never update it — it controls data migration behavior.
+- **`sops.templates` for composed secrets:** When a service needs multiple
+  secrets in one file (env file, config), use `sops.templates` with
+  `config.sops.placeholder.*` interpolation. Don't concatenate secret file
+  paths at runtime.
+- **Builder `configuration.nix` is mostly boilerplate:** The real configuration
+  lives in `imports.nix` -> `src/config.nix`. The `configuration.nix` retains
+  NixOS installer scaffolding comments.
+- **Deploy user vs root:** `deploy-remote` uses the `jose` deploy user with
+  `--use-remote-sudo`. `deploy-remote-bootstrap` uses `root` directly —
+  only for the first deploy before the deploy user exists.
+- **Firewall defaults to on:** NixOS firewall is enabled. Services must
+  explicitly open ports in their `.nix` file or the machine's firewall config.
+  Tailscale interface (`tailscale0`) is trusted — services accessible over
+  Tailscale without extra firewall rules.
