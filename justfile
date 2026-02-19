@@ -129,6 +129,10 @@ b2-warm path target="builder":
 health-house target="root@house":
 	ssh {{target}} "systemctl --failed --no-pager; echo; systemctl is-active dex outline postfix dovecot2"
 
+# Run qBittorrent script tests (Python, local, no SSH)
+test:
+	nix-shell -p python3 python3Packages.pytest --run "pytest machines/builder/src/service/qbittorrent/tests/ -v"
+
 SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identities
 secret filename:
 	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops {{filename}}
