@@ -224,11 +224,39 @@ in
 
       # Process a single item (file or directory) for upload.
       # $1 = item path, $2 = B2 base path (e.g. tv/ or movies/ or downloads/)
+      # Create .uploaded marker. Warns if it can't write (e.g. permission error).
+      mark_uploaded() {
+        local ITEM="$1" NAME="$2"
+        if ! ${pkgs.coreutils}/bin/touch "$ITEM.uploaded" 2>/dev/null; then
+          echo "WARNING: Cannot create upload marker: $ITEM.uploaded (permission denied)"
+          echo "Fix ownership: chown -R media:media \"$(${pkgs.coreutils}/bin/dirname "$ITEM")\""
+          return 1
+        fi
+      }
+
       process_item() {
         local ITEM="$1" B2_BASE="$2"
         local NAME WORK_DIR HAS_ARCHIVES DEST
 
         NAME=$(${pkgs.coreutils}/bin/basename "$ITEM")
+
+        # Compute B2 destination
+        if [ -d "$ITEM" ]; then
+          DEST="b2:entertainment-netmount/''${B2_BASE}$NAME"
+        else
+          DEST="b2:entertainment-netmount/''${B2_BASE}"
+        fi
+
+        # Check if file already exists at destination with correct checksum.
+        # Avoids re-uploading when a previous upload succeeded but the local
+        # marker was not created (e.g. permission error, killed process).
+        if ${pkgs.rclone}/bin/rclone check "$ITEM" "$DEST" \
+            --checksum --one-way 2>/dev/null; then
+          echo "Already on B2 (checksum match): $NAME"
+          mark_uploaded "$ITEM" "$NAME"
+          return 0
+        fi
+
         WORK_DIR="${extractedDir}/$NAME"
         HAS_ARCHIVES=0
 
@@ -261,26 +289,13 @@ in
         fi
         ${pkgs.coreutils}/bin/rm -rf "$WORK_DIR"
 
-        # Upload the original item (archive or not) to B2
-        if [ -d "$ITEM" ]; then
-          DEST="b2:entertainment-netmount/''${B2_BASE}$NAME"
-        else
-          DEST="b2:entertainment-netmount/''${B2_BASE}"
-        fi
-
+        # Upload the original item to B2
         echo "Uploading: $NAME -> $DEST"
         if ! upload "$ITEM" "$DEST"; then
           return 1
         fi
 
-        # Mark as uploaded so subsequent runs skip this item.
-        # If we can't write the marker (e.g. directory permissions), warn loudly
-        # and exit non-zero so we don't silently re-upload on every timer tick.
-        if ! ${pkgs.coreutils}/bin/touch "$ITEM.uploaded" 2>/dev/null; then
-          echo "ERROR: Cannot create upload marker: $ITEM.uploaded (permission denied)"
-          echo "Fix ownership: chown -R media:media \"$(${pkgs.coreutils}/bin/dirname "$ITEM")\""
-          return 1
-        fi
+        mark_uploaded "$ITEM" "$NAME"
         echo "Uploaded: $NAME"
       }
 
