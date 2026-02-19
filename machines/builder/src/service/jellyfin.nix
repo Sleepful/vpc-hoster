@@ -2,8 +2,8 @@
 { pkgs, ... }:
 {
   # First time setup:
-  # 1. Find builder's LAN IP: 
-  #          ssh builder 'ip -4 addr show' 
+  # 1. Find builder's LAN IP:
+  #          ssh builder 'ip -4 addr show'
   #    and look for the
   #    inet address on the LAN interface (e.g., ens18 or eth0). Alternatively
   #    check the Proxmox UI or the router's DHCP lease table.
@@ -13,10 +13,13 @@
   # 3. Walk through the Jellyfin setup wizard (language, create admin account).
   #    The admin password can only be set through this UI — Jellyfin has no
   #    declarative config for credentials.
-  # 4. Add media libraries pointing at /media (or subdirs like /media/movies,
-  #    /media/tv, /media/music)
-  # 5. Jellyfin will scan the directories and index any media files synced
-  #    by Syncthing (see syncthing.nix)
+  # 4. Add media libraries with multiple paths per type for local + B2 fallback:
+  #    - TV Shows library: /media/arr/tv (local, fast) + /media/b2/tv (B2, cold)
+  #    - Movies library: /media/arr/movies (local) + /media/b2/movies (B2)
+  #    Jellyfin merges multiple paths in one library — local copies are used
+  #    while seeding (7 days), then B2 copies serve older content after cleanup.
+  # 5. Jellyfin will scan the directories and index media files. Local content
+  #    streams instantly; B2 content uses the rclone VFS cache.
 
   services.jellyfin = {
     enable = true;

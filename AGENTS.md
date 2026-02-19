@@ -176,6 +176,10 @@ A successful `nixos-rebuild switch` is the primary validation — NixOS module
 evaluation catches type errors, missing attributes, and invalid option values
 at build time.
 
+**Deployment is the user's responsibility.** Do not run `just deploy` or
+`just deploy-remote` unless the user explicitly asks. Prepare changes, run
+`just syntax` or `just check`, and let the user decide when to deploy.
+
 ## Procedures
 
 ### Adding a New Service to an Existing Machine
@@ -353,12 +357,22 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 The builder runs a media download pipeline documented in `docs/media-pipeline.md`.
 Key services: qBittorrent, Sonarr, Radarr, Prowlarr, rclone B2 mount, Jellyfin.
 
+### Shared Media User
+
+All media pipeline services (qBittorrent, Sonarr, Radarr, Jellyfin, Copyparty)
+run as the `media` user. This enables Sonarr/Radarr to hard link (not copy)
+completed downloads into their import directories (`/media/arr/tv/`, `/media/arr/movies/`).
+Hard links require same user + same filesystem. Prowlarr is the exception — it
+uses `DynamicUser = true` and does not accept custom user/group.
+
+The `media` user and group are defined in `jellyfin.nix`.
+
 ### qBittorrent Category System
 
 Downloads are organized by category into subdirectories under `completed/`:
-- `tv-sonarr` category → `completed/tv/` → `b2:.../downloads/tv/`
-- `radarr` category → `completed/movies/` → `b2:.../downloads/movies/`
-- Uncategorized → `completed/` → `b2:.../downloads/`
+- `tv-sonarr` category → `completed/tv/` → hard linked to `/media/arr/tv/` → B2 `tv/`
+- `radarr` category → `completed/movies/` → hard linked to `/media/arr/movies/` → B2 `movies/`
+- Uncategorized → `completed/` → B2 `downloads/`
 
 Categories are defined in the `categories` attrset in `qbittorrent.nix` and
 registered via the qBittorrent API by `qbt-categories.service` on boot.
@@ -368,8 +382,9 @@ registered via the qBittorrent API by `qbt-categories.service` on boot.
 1. Add an entry to the `categories` attrset in `qbittorrent.nix`:
    `"category-name" = "subdirectory";`
 2. Everything else is derived automatically: tmpfiles rules, upload scan
-   commands, cleanup scan commands, and B2 upload paths.
-3. In the *arr app, set the Category field when configuring the download client.
+   commands, cleanup scan commands, import directories, and B2 upload paths.
+3. In the *arr app, set the Category field when configuring the download client
+   and set the root folder to `/media/arr/<subdirectory>`.
 
 ### Servarr Apps (Sonarr, Radarr, Prowlarr)
 
@@ -378,6 +393,7 @@ registered via the qBittorrent API by `qbt-categories.service` on boot.
 - Application-level config (download clients, indexers, root folders, quality
   profiles) is stored in SQLite and must be configured through the web UI.
 - Sonarr/Radarr support `user`/`group` options — use the shared `media` user.
+- Sonarr root folder: `/media/arr/tv`. Radarr root folder: `/media/arr/movies`.
 - Prowlarr uses `DynamicUser = true` and does not accept custom user/group.
 
 ### Nix String Interpolation in Shell Scripts

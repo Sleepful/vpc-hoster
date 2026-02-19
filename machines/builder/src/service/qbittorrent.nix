@@ -1,22 +1,30 @@
 # Part of the media pipeline — see docs/media-pipeline.md
 /*
-  qBittorrent with automatic B2 upload and seeding.
+  qBittorrent with automatic B2 upload via Sonarr/Radarr import and seeding.
+
+  All media pipeline services (qBittorrent, Sonarr, Radarr, Jellyfin, Copyparty)
+  run as the shared `media` user. This allows Sonarr/Radarr to hard link (not
+  copy) completed downloads into their root folders, avoiding duplicate disk usage.
 
   Workflow:
     1. qBittorrent downloads to downloading/ (TempPath).
     2. On completion, qBittorrent moves the file to completed/ (DefaultSavePath)
        and begins seeding from there.
-    3. qbt-upload-b2.timer fires every 2 minutes. The upload service scans
-       completed/ (and category subdirectories) for items without an .uploaded
-       marker, uploads them to B2, and marks them. The local file is kept for
-       seeding.
-    4. qBittorrent seeds indefinitely (no built-in ratio/time limits).
-    5. qbt-cleanup.timer runs every 10 minutes and for each file in completed/:
-       - If uploaded to B2 and seeding for >= seedingDays: removes the torrent
-         from qBittorrent via the API and deletes local files.
-       - If uploaded and orphaned (torrent manually removed from qBittorrent UI):
-         deletes local files immediately.
-       - If not yet uploaded: skips (never deletes before B2 upload).
+    3. Sonarr/Radarr detect the completed download and hard link + rename the
+       files into /media/arr/tv/ or /media/arr/movies/ (their root folders).
+       Since all services run as the same user and files are on the same
+       filesystem, hard links work — zero extra disk usage.
+    4. qbt-upload-b2.timer fires every 2 minutes. The upload service scans
+       /media/arr/tv/ and /media/arr/movies/ for new files (nice names from
+       *arr) and uploads them to B2. Falls back to scanning completed/ for
+       uncategorized downloads not managed by *arr.
+    5. qBittorrent seeds indefinitely (no built-in ratio/time limits).
+    6. qbt-cleanup.timer runs every 10 minutes. For items that have been uploaded
+       and seeded for >= seedingDays:
+       - Removes the torrent from qBittorrent via API
+       - Deletes files from completed/ (the seeding copy)
+       - Finds and deletes hard links from /media/arr/tv/ or /media/arr/movies/
+       - Prunes empty directories left behind
 
   Archive extraction (zip, rar):
     If a completed item is an archive or a directory containing archives,
@@ -27,18 +35,24 @@
 
   Categories:
     Downloads are organized by category (set by Sonarr/Radarr when sending
-    a torrent). Each category maps to a subdirectory under completed/ and a
-    matching path on B2:
-      tv-sonarr → completed/tv/  → b2:.../downloads/tv/
-      radarr    → completed/movies/ → b2:.../downloads/movies/
+    a torrent). Each category maps to a subdirectory under completed/:
+      tv-sonarr → completed/tv/
+      radarr    → completed/movies/
     Uncategorized downloads land directly in completed/ → downloads/ on B2.
+
+  Import directories (Sonarr/Radarr root folders):
+    /media/arr/tv/      — TV series (hard links from completed/tv/, nice names)
+    /media/arr/movies/  — Movies (hard links from completed/movies/, nice names)
+    These are uploaded to B2 as tv/ and movies/ respectively.
 
   Directories:
     /var/lib/qBittorrent/downloading  — in-progress downloads
-    /var/lib/qBittorrent/completed    — finished downloads (seeding + upload)
+    /var/lib/qBittorrent/completed    — finished downloads (seeding)
     /var/lib/qBittorrent/completed/tv — TV series (Sonarr category)
     /var/lib/qBittorrent/completed/movies — movies (Radarr category)
     /var/lib/qBittorrent/extracted    — temporary extraction dir (ephemeral)
+    /media/arr/tv                     — Sonarr root folder (hard links)
+    /media/arr/movies                 — Radarr root folder (hard links)
 
   Manual operations:
     - To free disk early: remove the torrent from qBittorrent's web UI, then
@@ -47,11 +61,11 @@
     - To retry a failed upload: `systemctl start qbt-upload-b2`.
 
   Systemd units:
-    qbt-upload-b2.timer      — polls every 2 min for new completed downloads
-    qbt-upload-b2.service    — uploads to B2, keeps local files, retries on failure
+    qbt-upload-b2.timer      — polls every 2 min for new files to upload
+    qbt-upload-b2.service    — uploads to B2 from /media/arr/ and completed/
     qbt-categories.service   — creates qBittorrent categories via API on boot
     qbt-cleanup.timer        — fires every 10 min
-    qbt-cleanup.service      — removes torrents after seedingDays, cleans up files
+    qbt-cleanup.service      — removes torrents after seedingDays, cleans up
 */
 { config, pkgs, ... }:
 let
@@ -62,33 +76,40 @@ let
   torrentingPort = 6881; # BitTorrent peer connections (incoming)
   seedingDays = 7; # How long to seed before cleanup removes the torrent and files
 
-  # Download categories — each maps to a subdirectory under completed/ and a
-  # matching path on B2. Sonarr/Radarr set the category when sending a torrent.
+  # Download categories — each maps to a subdirectory under completed/ and an
+  # import directory under /media/ where Sonarr/Radarr hard link with nice names.
   # Uncategorized downloads land directly in completed/ → downloads/ on B2.
   categories = {
     tv-sonarr = "tv";
     radarr = "movies";
   };
 
-  # All directories the upload and cleanup scripts need to scan
-  scanDirs = [ completedDir ] ++ map (sub: "${completedDir}/${sub}") (builtins.attrValues categories);
+  # Import directories — where Sonarr/Radarr hard link completed downloads.
+  # The upload script scans these for files to upload to B2 with nice names.
+  importDirs = builtins.mapAttrs (name: subdir: "/media/arr/${subdir}") categories;
 
   # Space-separated list of category subdirectory paths (used by scripts to skip them)
   categoryDirsList = builtins.concatStringsSep " " (map (sub: "${completedDir}/${sub}") (builtins.attrValues categories));
 
-  # Shell commands to scan each category subdirectory for uploads
-  uploadScanCommands = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: subdir:
-    "scan_dir \"${completedDir}/${subdir}\" \"downloads/${subdir}/\""
+  # Shell commands to scan each import directory for uploads
+  # Import dirs get uploaded to top-level B2 paths (tv/, movies/)
+  uploadImportCommands = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: subdir:
+    "scan_import_dir \"/media/arr/${subdir}\" \"${subdir}/\""
   ) categories));
 
   # Shell commands to scan each category subdirectory for cleanup
   cleanupScanCommands = builtins.concatStringsSep "\n" (map (sub:
     "scan_dir \"${completedDir}/${sub}\""
   ) (builtins.attrValues categories));
+
+  # Space-separated list of import directory paths for cleanup to search
+  importDirsList = builtins.concatStringsSep " " (map (sub: "/media/arr/${sub}") (builtins.attrValues categories));
 in
 {
   services.qbittorrent = {
     enable = true;
+    user = "media";
+    group = "media";
     inherit webuiPort;
     inherit torrentingPort;
 
@@ -115,12 +136,15 @@ in
     };
   };
 
-  # Ensure download directories exist with correct ownership
+  # Ensure download and import directories exist with correct ownership
   systemd.tmpfiles.rules = [
-    "d /var/lib/qBittorrent/downloading 0755 qbittorrent qbittorrent -"
-    "d ${completedDir} 0755 qbittorrent qbittorrent -"
-    "d ${extractedDir} 0755 qbittorrent qbittorrent -"
-  ] ++ map (sub: "d ${completedDir}/${sub} 0755 qbittorrent qbittorrent -")
+    "d /var/lib/qBittorrent/downloading 0755 media media -"
+    "d ${completedDir} 0755 media media -"
+    "d ${extractedDir} 0755 media media -"
+    "d /media/arr 0755 media media -"
+    "d /media/arr/tv 0755 media media -"
+    "d /media/arr/movies 0755 media media -"
+  ] ++ map (sub: "d ${completedDir}/${sub} 0755 media media -")
     (builtins.attrValues categories);
 
   # Create qBittorrent categories with save paths so downloads are organized
@@ -134,8 +158,8 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      User = "qbittorrent";
-      Group = "qbittorrent";
+      User = "media";
+      Group = "media";
       RemainAfterExit = true;
     };
 
@@ -163,16 +187,17 @@ in
     '';
   };
 
-  # Upload completed downloads to B2 (does not delete local files).
-  # Triggered by qbt-upload-b2.timer every 2 minutes, and can be started
-  # manually with `systemctl start qbt-upload-b2`.
+  # Upload completed downloads to B2.
+  # Primary: scans /media/arr/tv/ and /media/arr/movies/ (nice names from Sonarr/Radarr)
+  # Fallback: scans completed/ for uncategorized downloads (torrent names)
+  # Triggered by qbt-upload-b2.timer every 2 minutes.
   systemd.services.qbt-upload-b2 = {
     description = "Upload completed qBittorrent downloads to B2";
 
     serviceConfig = {
       Type = "oneshot";
-      User = "qbittorrent";
-      Group = "qbittorrent";
+      User = "media";
+      Group = "media";
       EnvironmentFile = config.sops.templates.rclone_b2_env.path;
     };
 
@@ -197,8 +222,8 @@ in
         unar -f -o "$EXTRACT_TO" "$ARCHIVE"
       }
 
-      # Process a single item (file or directory) from a scan directory.
-      # $1 = item path, $2 = B2 base path (e.g. downloads/ or downloads/tv/)
+      # Process a single item (file or directory) for upload.
+      # $1 = item path, $2 = B2 base path (e.g. tv/ or movies/ or downloads/)
       process_item() {
         local ITEM="$1" B2_BASE="$2"
         local NAME WORK_DIR HAS_ARCHIVES DEST
@@ -243,7 +268,7 @@ in
           DEST="b2:entertainment-netmount/''${B2_BASE}"
         fi
 
-        echo "Uploading: $NAME → $DEST"
+        echo "Uploading: $NAME -> $DEST"
         if ! upload "$ITEM" "$DEST"; then
           return 1
         fi
@@ -253,7 +278,30 @@ in
         echo "Uploaded: $NAME"
       }
 
-      # Scan a directory for items to upload.
+      # Scan an import directory (/media/tv/, /media/movies/) for items to upload.
+      # These contain nicely named files from Sonarr/Radarr.
+      # Recurse into subdirectories (e.g. /media/tv/Show Name/Season 1/)
+      # $1 = directory to scan, $2 = B2 base path (e.g. tv/ or movies/)
+      scan_import_dir() {
+        local DIR="$1" B2_BASE="$2"
+        for ITEM in "$DIR"/*; do
+          [ -e "$ITEM" ] || continue
+          case "$ITEM" in *.uploaded) continue ;; esac
+          [ -e "$ITEM.uploaded" ] && continue
+
+          if [ -d "$ITEM" ]; then
+            # Recurse into subdirectories (show/season structure)
+            local SUBDIR_NAME
+            SUBDIR_NAME=$(${pkgs.coreutils}/bin/basename "$ITEM")
+            scan_import_dir "$ITEM" "''${B2_BASE}$SUBDIR_NAME/"
+          else
+            # Upload individual files
+            process_item "$ITEM" "$B2_BASE" || continue
+          fi
+        done
+      }
+
+      # Scan completed/ for uncategorized downloads (not managed by *arr).
       # $1 = directory to scan, $2 = B2 base path
       scan_dir() {
         local DIR="$1" B2_BASE="$2"
@@ -269,11 +317,11 @@ in
         done
       }
 
-      # Scan uncategorized downloads (top-level completed/)
-      scan_dir "${completedDir}" "downloads/"
+      # Primary: scan import directories (nice names from *arr)
+      ${uploadImportCommands}
 
-      # Scan each category subdirectory
-      ${uploadScanCommands}
+      # Fallback: scan uncategorized downloads (top-level completed/)
+      scan_dir "${completedDir}" "downloads/"
     '';
   };
 
@@ -296,6 +344,8 @@ in
   # Runs every 10 minutes. For each uploaded file in completed/:
   #   - If the torrent has been seeding for >= seedingDays and was uploaded to
   #     B2, remove the torrent from qBittorrent and delete local files.
+  #   - Also removes hard links from /media/arr/tv/ and /media/arr/movies/ by inode,
+  #     and prunes empty directories left behind.
   #   - If the file is orphaned (no longer tracked by qBittorrent, e.g.
   #     manually removed from the UI) and was uploaded, delete immediately.
   #   - Never delete files that haven't been uploaded to B2 yet.
@@ -304,8 +354,8 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      User = "qbittorrent";
-      Group = "qbittorrent";
+      User = "media";
+      Group = "media";
     };
 
     script = ''
@@ -328,6 +378,37 @@ in
 
       # Known category subdirectory paths (to skip when scanning top-level)
       CATEGORY_DIRS="${categoryDirsList}"
+
+      # Import directories to search for hard links
+      IMPORT_DIRS="${importDirsList}"
+
+      # Remove hard links in import directories (/media/tv/, /media/movies/)
+      # that point to the same inode as the file being cleaned up.
+      # Then prune empty parent directories up to the import root.
+      remove_hardlinks() {
+        local ITEM="$1"
+        if [ -f "$ITEM" ]; then
+          # Single file — find hard links by inode
+          local INODE
+          INODE=$(${pkgs.coreutils}/bin/stat -c '%i' "$ITEM" 2>/dev/null) || return
+          for IMPORT_DIR in $IMPORT_DIRS; do
+            ${pkgs.findutils}/bin/find "$IMPORT_DIR" -inum "$INODE" -delete 2>/dev/null || true
+          done
+        elif [ -d "$ITEM" ]; then
+          # Directory — find hard links for each file inside
+          ${pkgs.findutils}/bin/find "$ITEM" -type f -print0 | while IFS= read -r -d "" FILE; do
+            local INODE
+            INODE=$(${pkgs.coreutils}/bin/stat -c '%i' "$FILE" 2>/dev/null) || continue
+            for IMPORT_DIR in $IMPORT_DIRS; do
+              ${pkgs.findutils}/bin/find "$IMPORT_DIR" -inum "$INODE" -delete 2>/dev/null || true
+            done
+          done
+        fi
+        # Prune empty directories in import dirs (bottom-up)
+        for IMPORT_DIR in $IMPORT_DIRS; do
+          ${pkgs.findutils}/bin/find "$IMPORT_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+        done
+      }
 
       # Process items in a directory. Checks upload status, seeding age, and
       # removes torrents/files when ready.
@@ -377,6 +458,9 @@ in
             echo "Cleaning orphan: $NAME"
           fi
 
+          # Remove hard links in import directories before deleting source
+          remove_hardlinks "$ITEM"
+
           ${pkgs.coreutils}/bin/rm -rf "$ITEM" "$ITEM.uploaded"
           CLEANED=$((CLEANED + 1))
         done
@@ -385,6 +469,18 @@ in
       # Scan uncategorized downloads and each category subdirectory
       scan_dir "${completedDir}"
       ${cleanupScanCommands}
+
+      # Also clean up .uploaded markers in import directories that no longer
+      # have a corresponding file (leftover from previous uploads)
+      for IMPORT_DIR in $IMPORT_DIRS; do
+        ${pkgs.findutils}/bin/find "$IMPORT_DIR" -name '*.uploaded' -print0 2>/dev/null \
+          | while IFS= read -r -d "" MARKER; do
+            SOURCE="''${MARKER%.uploaded}"
+            if [ ! -e "$SOURCE" ]; then
+              ${pkgs.coreutils}/bin/rm -f "$MARKER"
+            fi
+          done
+      done
 
       echo "Cleanup done: $CLEANED removed, $SEEDING seeding, $SKIPPED skipped"
     '';
@@ -411,6 +507,6 @@ in
   # rclone is needed by the upload service, unar for archive extraction
   environment.systemPackages = [ pkgs.rclone pkgs.unar ];
 
-  # Allow the qbittorrent user to read the SOPS-rendered rclone env file
-  sops.templates.rclone_b2_env.group = "qbittorrent";
+  # Allow the media user to read the SOPS-rendered rclone env file
+  sops.templates.rclone_b2_env.group = "media";
 }

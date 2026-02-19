@@ -76,6 +76,10 @@ check machine="builder":
 gc machine="builder":
 	ssh {{machine}} "nix-collect-garbage -d"
 
+# Resize builder disk after expanding it in Proxmox (ext4, /dev/sda1)
+resize-disk:
+	ssh {{NAME}} "growpart /dev/sda 1 && resize2fs /dev/sda1 && echo 'Done:' && df -h /"
+
 # Check builder usage and inode usage
 disk machine="builder":
 	ssh {{machine}} "df -h / /nix/store; echo; df -ih / /nix/store; echo; du -sh /nix/store"

@@ -28,5 +28,11 @@
     pkgs.htop
     pkgs.cloud-utils
     pkgs.jq
+    pkgs.mosh
+  ];
+
+  # Mosh uses UDP 60000-61000 for connections
+  networking.firewall.allowedUDPPortRanges = [
+    { from = 60000; to = 61000; }
   ];
 }
