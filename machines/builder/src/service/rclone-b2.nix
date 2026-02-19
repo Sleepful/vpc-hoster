@@ -47,8 +47,8 @@
       ExecStart = ''
         ${pkgs.rclone}/bin/rclone mount b2:entertainment-netmount /media/b2 \
           --vfs-cache-mode full \
-          --vfs-cache-max-size 150G \
-          --vfs-cache-max-age 168h \
+          --vfs-cache-max-size 50G \
+          --vfs-cache-max-age 48h \
           --allow-other \
           --dir-cache-time 1m \
           --use-mmap \
