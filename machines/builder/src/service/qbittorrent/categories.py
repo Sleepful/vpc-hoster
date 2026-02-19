@@ -52,8 +52,10 @@ def wait_for_api(api_url, timeout=30):
 def create_or_update_category(api_url, name, save_path):
     """Create a qBittorrent category, or update it if it already exists.
 
-    Returns True if the category was successfully created or updated.
+    Returns True if the category is correctly configured (created, updated,
+    or already exists with the correct save path).
     """
+    seen_conflict = False
     for endpoint in ("createCategory", "editCategory"):
         try:
             data = urllib.parse.urlencode(
@@ -69,9 +71,16 @@ def create_or_update_category(api_url, name, save_path):
             )
             urllib.request.urlopen(req, timeout=10)
             return True
+        except urllib.error.HTTPError as e:
+            # 409: category already exists (create) or save path unchanged (edit).
+            # Both are expected when the category is already correctly configured.
+            if e.code == 409:
+                seen_conflict = True
+                continue
+            return False
         except (urllib.error.URLError, OSError):
             continue
-    return False
+    return seen_conflict
 
 
 def main():

@@ -120,6 +120,9 @@ just check house
 # Local syntax check (no SSH needed)
 just s
 
+# Run qBittorrent script tests (Python, local, no SSH)
+just test
+
 # Edit a SOPS-encrypted secret
 just secret <filename>
 

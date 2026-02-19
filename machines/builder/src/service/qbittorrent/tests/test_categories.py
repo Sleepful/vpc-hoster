@@ -73,9 +73,15 @@ class TestCreateOrUpdateCategory:
         assert mock_urlopen.call_count == 1
 
     @patch("categories.urllib.request.urlopen")
-    def test_create_fails_edit_succeeds(self, mock_urlopen):
+    def test_create_conflict_edit_succeeds(self, mock_urlopen):
         mock_urlopen.side_effect = [
-            urllib.error.URLError("conflict"),  # createCategory fails
+            urllib.error.HTTPError(
+                "url",
+                409,
+                "Conflict",
+                {},
+                None,
+            ),  # createCategory: already exists
             MagicMock(),  # editCategory succeeds
         ]
         result = create_or_update_category(
@@ -87,7 +93,25 @@ class TestCreateOrUpdateCategory:
         assert mock_urlopen.call_count == 2
 
     @patch("categories.urllib.request.urlopen")
-    def test_both_fail(self, mock_urlopen):
+    def test_both_conflict_means_already_configured(self, mock_urlopen):
+        """Both endpoints return 409 when category exists with correct config."""
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "url",
+            409,
+            "Conflict",
+            {},
+            None,
+        )
+        result = create_or_update_category(
+            "http://localhost:8080/api/v2",
+            "tv-sonarr",
+            "/completed/tv",
+        )
+        assert result is True
+        assert mock_urlopen.call_count == 2
+
+    @patch("categories.urllib.request.urlopen")
+    def test_both_network_error(self, mock_urlopen):
         mock_urlopen.side_effect = urllib.error.URLError("error")
         result = create_or_update_category(
             "http://localhost:8080/api/v2",
@@ -96,6 +120,22 @@ class TestCreateOrUpdateCategory:
         )
         assert result is False
         assert mock_urlopen.call_count == 2
+
+    @patch("categories.urllib.request.urlopen")
+    def test_non_409_http_error(self, mock_urlopen):
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "url",
+            500,
+            "Server Error",
+            {},
+            None,
+        )
+        result = create_or_update_category(
+            "http://localhost:8080/api/v2",
+            "tv-sonarr",
+            "/completed/tv",
+        )
+        assert result is False
 
     @patch("categories.urllib.request.urlopen")
     def test_post_data(self, mock_urlopen):

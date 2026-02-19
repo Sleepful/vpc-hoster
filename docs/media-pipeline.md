@@ -232,7 +232,7 @@ The VFS cache is capped at 150 GB with a 7-day max age and self-manages.
 
 ## NixOS modules
 
-- `machines/builder/src/service/qbittorrent.nix` — download, upload, extraction, cleanup
+- `machines/builder/src/service/qbittorrent/` — download, upload, extraction, cleanup (directory module with Python scripts + tests)
 - `machines/builder/src/service/rclone-b2.nix` — FUSE mount of B2
 - `machines/builder/src/service/jellyfin.nix` — media server (defines `media` user/group)
 - `machines/builder/src/service/copyparty.nix` — file browser / WebDAV

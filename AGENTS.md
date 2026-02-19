@@ -47,7 +47,7 @@ machines/
     hardware-configuration.nix     # Hardware scan output (builder, house only)
     src/
       config.nix                   # Machine-specific config + import hub for services
-      service/                     # One .nix file per service
+      service/                     # One .nix file (or directory module) per service
       backend/                     # Application backends (builder only)
       database/                    # Database engines (builder only)
       data/                        # Static data files (house only)
@@ -165,16 +165,20 @@ just submodule-commit-all "msg" # Stage all, commit, push private/
 
 ### Testing
 
-There is no automated test suite. Testing is manual:
+For Nix configuration, testing is manual — a successful `nixos-rebuild switch`
+is the primary validation (NixOS module evaluation catches type errors, missing
+attributes, and invalid option values at build time):
 1. Make changes locally.
 2. Run `just syntax` for quick local syntax check.
 3. Deploy to builder VM (`just deploy`).
 4. Verify the service works.
 5. If it works, deploy to the production remote (`just deploy-remote house`).
 
-A successful `nixos-rebuild switch` is the primary validation — NixOS module
-evaluation catches type errors, missing attributes, and invalid option values
-at build time.
+The qBittorrent companion scripts (Python) have a pytest suite:
+```sh
+just test                    # Run qBittorrent script tests (local, no SSH)
+```
+See `machines/builder/src/service/qbittorrent/tests/` for the test files.
 
 **Deployment is the user's responsibility.** Do not run `just deploy` or
 `just deploy-remote` unless the user explicitly asks. Prepare changes, run
@@ -230,8 +234,14 @@ at build time.
 
 ### Language
 
-All infrastructure code is Nix. Shell scripts appear only inside Nix heredoc strings
-(`script = '' ... '';`) for systemd service definitions.
+All infrastructure code is Nix. Shell scripts appear inside Nix heredoc strings
+(`script = '' ... '';`) for small systemd service definitions.
+
+**Exception:** The qBittorrent companion services (upload, cleanup, category
+registration) are standalone Python scripts in
+`machines/builder/src/service/qbittorrent/`. They read configuration from
+environment variables set by systemd, making them independently testable with
+pytest. See the `tests/` subdirectory and `just test`.
 
 ### File Naming
 
@@ -337,6 +347,8 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
   There is no runtime error handling in Nix configuration.
 - In embedded shell scripts, failures propagate to systemd service status.
   Use guard clauses for expected conditions (e.g., "already connected").
+- In the qBittorrent Python scripts, errors are caught with try/except and
+  logged — the scripts skip failed items and continue processing.
 - In the justfile, task chaining (e.g., `deploy: sync`) stops on
   the first failure.
 
@@ -345,6 +357,9 @@ When embedding bash in Nix heredoc strings (`script = '' ... '';`):
 - When modifying the `justfile`, always review `README.md` to ensure it still
   accurately describes the changed recipes. Update any outdated command
   descriptions, examples, or workflow instructions in the README to match.
+- When adding new files, directories, languages, or test suites to the repo,
+  review `AGENTS.md` and update the relevant sections (Repository Layout,
+  Language, Testing, Procedures, etc.) so they remain accurate.
 
 ### Commit Messages
 
@@ -374,12 +389,35 @@ Downloads are organized by category into subdirectories under `completed/`:
 - `radarr` category → `completed/movies/` → hard linked to `/media/arr/movies/` → B2 `movies/`
 - Uncategorized → `completed/` → B2 `downloads/`
 
-Categories are defined in the `categories` attrset in `qbittorrent.nix` and
+Categories are defined in the `categories` attrset in `qbittorrent/default.nix` and
 registered via the qBittorrent API by `qbt-categories.service` on boot.
+
+### qBittorrent Scripts (Python)
+
+The three companion services (`qbt-categories`, `qbt-upload-b2`, `qbt-cleanup`)
+are implemented as standalone Python scripts alongside the Nix module:
+
+```
+machines/builder/src/service/qbittorrent/
+  default.nix          # NixOS module (systemd units, env vars, timers)
+  categories.py        # Category registration via qBittorrent API
+  upload.py            # Upload to B2 from import dirs and completed/
+  cleanup.py           # Seeding lifecycle, hardlink removal, pruning
+  tests/
+    conftest.py        # Adds parent dir to sys.path
+    test_categories.py
+    test_upload.py
+    test_cleanup.py
+```
+
+Scripts read all configuration from environment variables set by
+`serviceConfig.Environment` in `default.nix`. Only `rclone` and `unar` use
+subprocess — everything else (HTTP, JSON, filesystem, inode lookup) is Python
+stdlib. Run `just test` to execute the pytest suite locally.
 
 ### Adding a New Download Category
 
-1. Add an entry to the `categories` attrset in `qbittorrent.nix`:
+1. Add an entry to the `categories` attrset in `qbittorrent/default.nix`:
    `"category-name" = "subdirectory";`
 2. Everything else is derived automatically: tmpfiles rules, upload scan
    commands, cleanup scan commands, import directories, and B2 upload paths.
@@ -398,10 +436,10 @@ registered via the qBittorrent API by `qbt-categories.service` on boot.
 
 ### Nix String Interpolation in Shell Scripts
 
-When generating shell commands from Nix attrsets (e.g., `builtins.mapAttrs`),
-avoid nesting `'' ''` multiline strings inside a `script = '' ... '';` block —
-this causes parse errors. Instead, hoist the generated strings into `let`
-bindings and interpolate the binding name:
+When embedding bash in Nix heredoc strings (`script = '' ... '';`) and generating
+shell commands from Nix attrsets (e.g., `builtins.mapAttrs`), avoid nesting
+`'' ''` multiline strings — this causes parse errors. Instead, hoist the
+generated strings into `let` bindings and interpolate the binding name:
 
 ```nix
 # Bad — nested '' strings cause parser confusion
@@ -420,6 +458,10 @@ in ''
   ${cmds}
 '';
 ```
+
+For complex scripts, prefer standalone Python files over inline bash — see
+the qBittorrent scripts for the pattern (`ExecStart` pointing to a `.py` file,
+configuration via environment variables).
 
 ### Validation Levels
 

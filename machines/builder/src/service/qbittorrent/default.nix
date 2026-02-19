@@ -60,6 +60,13 @@
     - To monitor: `just qbt-logs` (follows qbittorrent, upload, and cleanup).
     - To retry a failed upload: `systemctl start qbt-upload-b2`.
 
+  Verifying after deploy:
+    ssh builder "systemctl restart qbt-categories && journalctl -u qbt-categories --no-pager -n 15 --since '1 minute ago'"
+    ssh builder "systemctl start qbt-upload-b2 && journalctl -u qbt-upload-b2 --no-pager -n 50 --since '1 minute ago'"
+    ssh builder "systemctl start qbt-cleanup && journalctl -u qbt-cleanup --no-pager -n 50 --since '1 minute ago'"
+    Expected: categories prints "Category: <name> -> <subdir>/", upload
+    completes (may have nothing to do), cleanup reports seeding/skipped/removed.
+
   Scripts:
     The three companion services (categories, upload, cleanup) are implemented
     as standalone Python scripts alongside this module. They read all
