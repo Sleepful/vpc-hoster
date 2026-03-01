@@ -71,9 +71,21 @@ def fetch_torrents(api_url):
 
 
 def find_torrent_by_path(torrents, content_path):
-    """Find a torrent entry matching the given content_path."""
+    """Find a torrent entry matching the given content_path.
+
+    Handles both multi-file torrents (content_path == directory) and
+    single-file torrents in a subdirectory (content_path == file inside
+    directory). For the latter, qBittorrent sets content_path to the
+    file path, but the cleanup script scans the parent directory.
+    """
+    path_str = str(content_path)
     for t in torrents:
-        if t["content_path"] == str(content_path):
+        tcp = t["content_path"]
+        if tcp == path_str:
+            return t
+        # Single-file torrent in a subdirectory: content_path points to
+        # the file inside, but we're scanning the parent directory
+        if tcp.startswith(path_str + "/"):
             return t
     return None
 
@@ -126,11 +138,18 @@ def remove_hardlinks(item, import_dirs):
     When we delete from completed/, hard links in import dirs would keep
     the data alive (link count drops from 2 to 1). We explicitly find
     and delete them by inode number.
+
+    Also cleans up associated files (subtitles, metadata, .uploaded markers)
+    that share the same name stem as deleted files. Radarr may copy these
+    instead of hard-linking, giving them different inodes that the
+    inode-based pass misses.
     """
     inodes = collect_inodes(item)
     if not inodes:
         return
 
+    # First pass: delete files by inode match, track what was deleted
+    deleted_files = []
     for import_dir in import_dirs:
         import_path = Path(import_dir)
         if not import_path.exists():
@@ -139,7 +158,22 @@ def remove_hardlinks(item, import_dirs):
             if f.is_file():
                 try:
                     if os.stat(f).st_ino in inodes:
+                        deleted_files.append(f)
                         f.unlink()
+                except OSError:
+                    continue
+
+    # Second pass: clean up sibling files that share the same name stem
+    # as deleted files (e.g. subtitles, .nfo, .uploaded markers)
+    for deleted in deleted_files:
+        stem = deleted.stem
+        parent = deleted.parent
+        if not parent.exists():
+            continue
+        for sibling in list(parent.iterdir()):
+            if sibling.is_file() and sibling.name.startswith(stem):
+                try:
+                    sibling.unlink()
                 except OSError:
                     continue
 

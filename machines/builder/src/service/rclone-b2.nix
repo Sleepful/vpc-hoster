@@ -53,7 +53,7 @@
           --dir-cache-time 1m \
           --use-mmap \
           --buffer-size 512M \
-          --vfs-read-ahead 1G \
+          --vfs-read-ahead 10G \
           --vfs-read-chunk-streams 4 \
           --vfs-fast-fingerprint \
           --rc \

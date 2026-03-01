@@ -67,6 +67,24 @@ class TestFindTorrentByPath:
         torrents = [{"content_path": "/completed/a.mkv", "hash": "aaa"}]
         assert find_torrent_by_path(torrents, Path("/completed/missing.mkv")) is None
 
+    def test_single_file_in_subdir(self):
+        """Single-file torrent: content_path is the file, but we scan the directory."""
+        torrents = [
+            {
+                "content_path": "/completed/TorrentName/TorrentName.mkv",
+                "hash": "ccc",
+            }
+        ]
+        result = find_torrent_by_path(torrents, Path("/completed/TorrentName"))
+        assert result["hash"] == "ccc"
+
+    def test_no_false_prefix_match(self):
+        """Directory name that is a prefix of another should not match."""
+        torrents = [
+            {"content_path": "/completed/Movie-Extended/Movie.mkv", "hash": "ddd"}
+        ]
+        assert find_torrent_by_path(torrents, Path("/completed/Movie")) is None
+
     def test_empty_list(self):
         assert find_torrent_by_path([], Path("/any/path")) is None
 
@@ -165,6 +183,57 @@ class TestRemoveHardlinks:
         assert not (tmp_path / "import" / "Show").exists()
         # import/ root still exists
         assert (tmp_path / "import").exists()
+
+    def test_cleans_sibling_subtitles(self, tmp_path):
+        """Non-hard-linked sibling files (e.g. Radarr-copied subs) are cleaned up."""
+        completed = tmp_path / "completed"
+        completed.mkdir()
+        import_dir = tmp_path / "import" / "Movie (2024)"
+        import_dir.mkdir(parents=True)
+
+        # Create source file and hard link the .mkv into import dir
+        source_mkv = completed / "release.mkv"
+        source_mkv.write_bytes(b"movie data")
+        os.link(source_mkv, import_dir / "release.mkv")
+
+        # Simulate Radarr copying the subtitle (different inode, not a hard link)
+        (import_dir / "release.spa.srt").write_bytes(b"subtitle data")
+        (import_dir / "release.spa.srt.uploaded").touch()
+        (import_dir / "release.mkv.uploaded").touch()
+
+        remove_hardlinks(source_mkv, [str(tmp_path / "import")])
+
+        # Hard-linked .mkv is removed
+        assert not (import_dir / "release.mkv").exists()
+        # Sibling subtitle (shares stem "release") is also removed
+        assert not (import_dir / "release.spa.srt").exists()
+        # Markers are also removed
+        assert not (import_dir / "release.spa.srt.uploaded").exists()
+        assert not (import_dir / "release.mkv.uploaded").exists()
+        # Directory pruned since now empty
+        assert not import_dir.exists()
+
+    def test_sibling_cleanup_preserves_unrelated(self, tmp_path):
+        """Sibling cleanup only removes files matching the deleted file's stem."""
+        completed = tmp_path / "completed"
+        completed.mkdir()
+        import_dir = tmp_path / "import" / "Season 1"
+        import_dir.mkdir(parents=True)
+
+        # Episode 1 — being cleaned up
+        ep1_source = completed / "ep1.mkv"
+        ep1_source.write_bytes(b"episode 1")
+        os.link(ep1_source, import_dir / "ep1.mkv")
+
+        # Episode 2 — unrelated, should survive
+        (import_dir / "ep2.mkv").write_bytes(b"episode 2")
+        (import_dir / "ep2.srt").write_bytes(b"sub 2")
+
+        remove_hardlinks(ep1_source, [str(tmp_path / "import")])
+
+        assert not (import_dir / "ep1.mkv").exists()
+        assert (import_dir / "ep2.mkv").exists()
+        assert (import_dir / "ep2.srt").exists()
 
     def test_no_import_dirs(self, tmp_path):
         """No crash when import dirs don't exist."""

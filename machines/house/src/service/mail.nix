@@ -100,7 +100,7 @@ in
     hostName = fqdn sub.mail;
     extraConfig = ''
       $config['imap_host'] = "ssl://${config.mailserver.fqdn}:993";
-      $config['smtp_host'] = "tls://${config.mailserver.fqdn}";
+      $config['smtp_host'] = "ssl://${config.mailserver.fqdn}:465";
       $config['smtp_user'] = "%u";
       $config['smtp_pass'] = "%p";
     '';
