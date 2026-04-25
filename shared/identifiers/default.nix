@@ -19,7 +19,9 @@
 
     subdomains = {
       acmechallenge = lib.mkDefault "acmechallenge";
+      auth = lib.mkDefault "auth";
       cal = lib.mkDefault "cal";
+      chat = lib.mkDefault "chat";
       dex = lib.mkDefault "dex";
       email = lib.mkDefault "email";
       grafana = lib.mkDefault "grafana";

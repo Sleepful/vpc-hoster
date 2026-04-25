@@ -15,16 +15,24 @@ sync: delete copy
 lock:
 	nix flake update nixpkgs
 
+# Copy updated flake.lock back from builder after deploy
+lock-back:
+	scp {{NAME}}:{{REMOTE}}/flake.lock .
+
 # Deploy builder only (rebuilds itself)
 # Intentionally no machine arg to avoid accidental `just deploy house`.
 deploy:
 	just sync
 	ssh {{NAME}} "nixos-rebuild switch --flake path:{{REMOTE}}#builder"
+	@echo ""
+	@echo "==> If flake.lock was updated, run: just lock-back"
 
 # Deploy a remote machine (builder builds and pushes via SSH)
 deploy-remote machine:
 	just sync
 	ssh {{NAME}} "NIX_SSHOPTS='-o IdentitiesOnly=yes -i {{DEPLOY_KEY}}' nixos-rebuild switch --fast --flake path:{{REMOTE}}#{{machine}} --target-host {{DEPLOY_USER}}@{{machine}} --use-remote-sudo"
+	@echo ""
+	@echo "==> If flake.lock was updated, run: just lock-back"
 
 # One-time bootstrap deploy when DEPLOY_USER does not exist yet
 deploy-remote-bootstrap machine:

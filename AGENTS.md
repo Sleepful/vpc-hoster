@@ -49,14 +49,14 @@ machines/
       config.nix                   # Machine-specific config + import hub for services
       service/                     # One .nix file (or directory module) per service
       backend/                     # Application backends (builder only)
-      database/                    # Database engines (builder only)
+      database/                    # Database engines (builder and house)
       data/                        # Static data files (house only)
 ```
 
 ### Module Import Chain
 
 `flake.nix` -> `machines/<machine>/configuration.nix` -> `shared/base.nix` +
-`src/config.nix` -> `src/service/*.nix`.
+`src/config.nix` -> `src/service/*.nix` + `src/database/*.nix`.
 
 Note: builder uses an extra `imports.nix` shim between `configuration.nix` and the
 rest (historical artifact from bootstrap). House and hoster import directly.

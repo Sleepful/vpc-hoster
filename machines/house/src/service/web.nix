@@ -6,7 +6,9 @@ let
   fqdn = name: "${name}.${rootDomain}";
   acmeWebRoot = "/var/lib/acme/.challenges";
   extraDomainNames = map fqdn [
+    sub.auth
     sub.cal
+    sub.chat
     sub.dex
     sub.email
     sub.grafana

@@ -48,6 +48,8 @@ with lib;
     subdomains = {
       acmechallenge = mkOption { type = types.str; default = "acmechallenge"; };
       cal = mkOption { type = types.str; default = "cal"; };
+      auth = mkOption { type = types.str; default = "auth"; };
+      chat = mkOption { type = types.str; default = "chat"; };
       dex = mkOption { type = types.str; default = "dex"; };
       email = mkOption { type = types.str; default = "email"; };
       grafana = mkOption { type = types.str; default = "grafana"; };

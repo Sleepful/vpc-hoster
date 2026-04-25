@@ -27,16 +27,21 @@ in
   sops.secrets.discord_token.owner = "mc-discord";
   sops.secrets.instance_id.owner = "mc-discord";
 
-  sops.secrets.outline_oidc_secret_for_dex = {
-    key = "outline_oidc_secret";
-    owner = "dex";
-    restartUnits = [ "dex.service" ];
-  };
-  sops.secrets.outline_oidc_secret_for_outline = {
-    key = "outline_oidc_secret";
+  sops.secrets.outline_oidc_secret = {
     owner = "outline";
+    group = "outline";
     restartUnits = [ "outline.service" ];
   };
+
+  sops.secrets.keycloak_admin_password = {
+    restartUnits = [ "keycloak.service" ];
+  };
+
+  sops.secrets.keycloak_db_password = {
+    restartUnits = [ "keycloak.service" ];
+  };
+
+  sops.secrets.openwebui_oidc_secret = {};
 
   # Dovecot reads hashes via /run/dovecot2/passwd generated at dovecot start.
   # Restart dovecot automatically when hashes change.
@@ -51,19 +56,6 @@ in
   };
   sops.secrets.mail_hash_shared = {
     restartUnits = [ "dovecot2.service" ];
-  };
-
-  sops.secrets.dex_hash_super = {
-    owner = "dex";
-    restartUnits = [ "dex.service" ];
-  };
-  sops.secrets.dex_hash_atlas = {
-    owner = "dex";
-    restartUnits = [ "dex.service" ];
-  };
-  sops.secrets.dex_hash_lumen = {
-    owner = "dex";
-    restartUnits = [ "dex.service" ];
   };
 
   sops.templates.miniflux_creds = {
@@ -92,14 +84,21 @@ in
     mode = "0400";
   };
 
-  sops.templates.dex_env = {
+  sops.templates.keycloak_admin_env = {
     content = ''
-      DEX_HASH_SUPER=\${config.sops.placeholder.dex_hash_super}
-      DEX_HASH_ATLAS=\${config.sops.placeholder.dex_hash_atlas}
-      DEX_HASH_LUMEN=\${config.sops.placeholder.dex_hash_lumen}
+      KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD=${config.sops.placeholder.keycloak_admin_password}
     '';
-    owner = "dex";
     mode = "0400";
+  };
+
+  sops.templates.openwebui_env = {
+    content = ''
+      OAUTH_CLIENT_ID=openwebui
+      OAUTH_CLIENT_SECRET=${config.sops.placeholder.openwebui_oidc_secret}
+      OPENID_PROVIDER_URL=https://${ids.subdomains.auth}.${ids.domain.root}/realms/master/.well-known/openid-configuration
+    '';
+    mode = "0444";
   };
 
   sops.templates.radicale_users = {

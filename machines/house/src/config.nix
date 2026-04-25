@@ -1,7 +1,9 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 {
   system.stateVersion = "25.05";
   networking.hostName = "nixos-house";
+
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "outline" "open-webui" ];
 
   boot.loader.grub = {
     enable = true;
@@ -21,6 +23,7 @@
   nix.settings.trusted-users = [ "@wheel" ];
 
   imports = [
+    ./database/pg.nix
     ./service/ssh.nix
     ./service/secrets.nix
     ./service/tailnet.nix
@@ -29,7 +32,9 @@
     ./service/miniflux.nix
     ./service/syncthing.nix
     ./service/mail.nix
-    ./service/outline-dex.nix
+    ./service/keycloak.nix
+    ./service/outline.nix
+    ./service/openwebui.nix
     ./service/monitoring.nix
     ./service/aws.nix
     ./service/mc-discord.nix
