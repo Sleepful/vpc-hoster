@@ -12,6 +12,7 @@ in
     port = 8080;
     environment = {
       WEBUI_URL = "https://${fqdn sub.chat}";
+      ENABLE_SIGNUP = "false";
       ENABLE_OAUTH_SIGNUP = "true";
       OAUTH_MERGE_ACCOUNTS_BY_EMAIL = "true";
       OAUTH_PROVIDER_NAME = "Keycloak";
@@ -30,12 +31,6 @@ in
     locations."/" = {
       proxyPass = "http://127.0.0.1:8080";
       proxyWebsockets = true;
-      extraConfig = ''
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      '';
     };
   };
 }

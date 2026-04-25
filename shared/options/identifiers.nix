@@ -51,6 +51,7 @@ with lib;
       auth = mkOption { type = types.str; default = "auth"; };
       chat = mkOption { type = types.str; default = "chat"; };
       dex = mkOption { type = types.str; default = "dex"; };
+      docs = mkOption { type = types.str; default = "docs"; };
       email = mkOption { type = types.str; default = "email"; };
       grafana = mkOption { type = types.str; default = "grafana"; };
       mail = mkOption { type = types.str; default = "mail"; };

@@ -9,7 +9,7 @@ in
 {
   services.outline = {
     enable = true;
-    publicUrl = "https://${fqdn sub.outline}";
+    publicUrl = "https://${fqdn sub.docs}";
     port = 3003;
     forceHttps = false;
     storage.storageType = "local";
@@ -37,7 +37,7 @@ in
     };
   };
 
-  services.nginx.virtualHosts."${fqdn sub.outline}" = {
+  services.nginx.virtualHosts."${fqdn sub.docs}" = {
     onlySSL = true;
     useACMEHost = rootDomain;
     locations."/" = {

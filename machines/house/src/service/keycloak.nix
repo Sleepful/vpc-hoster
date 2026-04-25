@@ -16,9 +16,10 @@ in
     settings = {
       http-host = "127.0.0.1";
       http-port = 8081;
+      http-enabled = true;
       proxy-headers = "xforwarded";
       hostname = fqdn sub.auth;
-      hostname-backchannel-dynamic = true;
+      hostname-backchannel-dynamic = false;
     };
   };
 

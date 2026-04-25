@@ -10,6 +10,7 @@ let
     sub.cal
     sub.chat
     sub.dex
+    sub.docs
     sub.email
     sub.grafana
     sub.mail

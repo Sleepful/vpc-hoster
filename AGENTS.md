@@ -501,6 +501,10 @@ configuration via environment variables).
   unchanged units. Run `systemctl reset-failed <unit>` on the target machine
   before redeploying, or change the unit definition so NixOS regenerates it.
 
+## Abbreviations
+
+- **OI** — OpenWebUI (the LLM chat interface, formerly referred to as "OpenWebUI" or "chat").
+
 ## Gotchas and Non-Obvious Requirements
 
 - **`path:` prefix in flake references:** On builder, flake commands use

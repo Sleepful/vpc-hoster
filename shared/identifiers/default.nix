@@ -23,6 +23,7 @@
       cal = lib.mkDefault "cal";
       chat = lib.mkDefault "chat";
       dex = lib.mkDefault "dex";
+      docs = lib.mkDefault "docs";
       email = lib.mkDefault "email";
       grafana = lib.mkDefault "grafana";
       mail = lib.mkDefault "mail";
