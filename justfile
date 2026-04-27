@@ -137,6 +137,11 @@ b2-warm path target="builder":
 health-house target="root@house":
 	ssh {{target}} "systemctl --failed --no-pager; echo; systemctl is-active dex outline postfix dovecot2"
 
+# Check Docker container and image status on house
+alias d := docker-status
+docker-status target="root@house":
+	@ssh {{target}} 'echo "=== Running Containers ===" && docker ps 2>/dev/null || echo "Docker not running or no containers" && echo && echo "=== All Images ===" && docker images 2>/dev/null || echo "No images"'
+
 # Run qBittorrent script tests (Python, local, no SSH)
 test:
 	nix-shell -p python3 python3Packages.pytest --run "pytest machines/builder/src/service/qbittorrent/tests/ -v"

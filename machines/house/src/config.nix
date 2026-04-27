@@ -3,7 +3,7 @@
   system.stateVersion = "25.05";
   networking.hostName = "nixos-house";
 
-  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "outline" "open-webui" ];
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "outline" ];
 
   boot.loader.grub = {
     enable = true;
@@ -34,7 +34,8 @@
     ./service/mail.nix
     ./service/keycloak.nix
     ./service/outline.nix
-    ./service/openwebui.nix
+    ./service/docker.nix
+    ./service/librechat.nix
     ./service/monitoring.nix
     ./service/aws.nix
     ./service/mc-discord.nix

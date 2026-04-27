@@ -137,6 +137,25 @@ just hash-bcrypt                       # Generate bcrypt hash locally
 just hash-bcrypt-house                 # Generate bcrypt hash on house
 ```
 
+**SOPS Secrets Helper Script:**
+
+For managing secrets without writing decrypted content to disk, use
+`scripts/sops-secrets.sh`:
+
+```sh
+# Set or update a secret value
+./scripts/sops-secrets.sh secrets/house/core.yaml set my_key "secret_value"
+
+# Get a secret value
+./scripts/sops-secrets.sh secrets/house/core.yaml get my_key
+
+# Delete a secret key
+./scripts/sops-secrets.sh secrets/house/core.yaml delete old_key
+
+# List all secret keys
+./scripts/sops-secrets.sh secrets/house/core.yaml list
+```
+
 ### Bootstrap Recipes
 
 ```sh
@@ -501,10 +520,6 @@ configuration via environment variables).
   unchanged units. Run `systemctl reset-failed <unit>` on the target machine
   before redeploying, or change the unit definition so NixOS regenerates it.
 
-## Abbreviations
-
-- **OI** — OpenWebUI (the LLM chat interface, formerly referred to as "OpenWebUI" or "chat").
-
 ## Gotchas and Non-Obvious Requirements
 
 - **`path:` prefix in flake references:** On builder, flake commands use
@@ -531,6 +546,17 @@ configuration via environment variables).
 - **Deploy user vs root:** `deploy-remote` uses the `jose` deploy user with
   `--use-remote-sudo`. `deploy-remote-bootstrap` uses `root` directly —
   only for the first deploy before the deploy user exists.
+- **MongoDB runs via Docker:** MongoDB's SSPL license blocks binary caching
+  in nixpkgs, causing 3-5 hour source compilations on every update. House uses
+  `virtualisation.oci-containers.containers.mongodb` with the official `mongo:7`
+  image instead. This is a pragmatic exception to the "pure Nix" philosophy.
+- **Docker for custom apps:** Future custom applications developed on macOS may
+  be deployed via Docker containers to avoid cross-compilation on the builder
+  VM. The `virtualisation.oci-containers` module provides declarative container
+  management in NixOS. A local registry (`registry:2`) runs on house at
+  `127.0.0.1:5000` for storing custom images. Push from macOS via SSH tunnel:
+  `ssh -L 5000:localhost:5000 house`, then `docker push localhost:5000/myapp`.
+  Check container/image status with `just docker-status` or `just d`.
 - **Firewall defaults to on:** NixOS firewall is enabled. Services must
   explicitly open ports in their `.nix` file or the machine's firewall config.
   Tailscale interface (`tailscale0`) is trusted — services accessible over

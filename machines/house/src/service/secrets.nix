@@ -41,7 +41,12 @@ in
     restartUnits = [ "keycloak.service" ];
   };
 
-  sops.secrets.openwebui_oidc_secret = {};
+  sops.secrets.librechat_creds_key = {};
+  sops.secrets.librechat_creds_iv = {};
+  sops.secrets.librechat_jwt_secret = {};
+  sops.secrets.librechat_jwt_refresh_secret = {};
+  sops.secrets.librechat_oidc_secret = {};
+  sops.secrets.librechat_session_secret = {};
 
   # Dovecot reads hashes via /run/dovecot2/passwd generated at dovecot start.
   # Restart dovecot automatically when hashes change.
@@ -92,13 +97,22 @@ in
     mode = "0400";
   };
 
-  sops.templates.openwebui_env = {
+  sops.templates.librechat_env = {
     content = ''
-      OAUTH_CLIENT_ID=openwebui
-      OAUTH_CLIENT_SECRET=${config.sops.placeholder.openwebui_oidc_secret}
-      OPENID_PROVIDER_URL=https://${ids.subdomains.auth}.${ids.domain.root}/realms/master/.well-known/openid-configuration
+      CREDS_KEY=${config.sops.placeholder.librechat_creds_key}
+      CREDS_IV=${config.sops.placeholder.librechat_creds_iv}
+      JWT_SECRET=${config.sops.placeholder.librechat_jwt_secret}
+      JWT_REFRESH_SECRET=${config.sops.placeholder.librechat_jwt_refresh_secret}
+      OPENID_CLIENT_ID=librechat
+      OPENID_CLIENT_SECRET=${config.sops.placeholder.librechat_oidc_secret}
+      OPENID_ISSUER=https://${ids.subdomains.auth}.${ids.domain.root}/realms/master
+      OPENID_SESSION_SECRET=${config.sops.placeholder.librechat_session_secret}
+      OPENID_SCOPE=openid profile email
+      OPENID_CALLBACK_URL=/oauth/openid/callback
+      OPENID_USE_END_SESSION_ENDPOINT=true
     '';
-    mode = "0444";
+    mode = "0400";
+    restartUnits = [ "librechat.service" ];
   };
 
   sops.templates.radicale_users = {
