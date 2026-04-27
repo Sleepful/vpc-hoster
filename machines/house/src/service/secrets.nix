@@ -48,6 +48,12 @@ in
   sops.secrets.librechat_oidc_secret = {};
   sops.secrets.librechat_session_secret = {};
 
+  # API keys for LibreChat endpoints (set via sops-secrets.sh when ready)
+  sops.secrets.moonshot_api_key = {};
+  sops.secrets.deepseek_api_key = {};
+  sops.secrets.exa_api_key = {};
+  sops.secrets.brave_api_key = {};
+
   # Dovecot reads hashes via /run/dovecot2/passwd generated at dovecot start.
   # Restart dovecot automatically when hashes change.
   sops.secrets.mail_hash_contact = {
@@ -110,6 +116,10 @@ in
       OPENID_SCOPE=openid profile email
       OPENID_CALLBACK_URL=/oauth/openid/callback
       OPENID_USE_END_SESSION_ENDPOINT=true
+      MOONSHOT_API_KEY=${config.sops.placeholder.moonshot_api_key}
+      DEEPSEEK_API_KEY=${config.sops.placeholder.deepseek_api_key}
+      EXA_API_KEY=${config.sops.placeholder.exa_api_key}
+      BRAVE_API_KEY=${config.sops.placeholder.brave_api_key}
     '';
     mode = "0400";
     restartUnits = [ "librechat.service" ];

@@ -561,3 +561,18 @@ configuration via environment variables).
   explicitly open ports in their `.nix` file or the machine's firewall config.
   Tailscale interface (`tailscale0`) is trusted — services accessible over
   Tailscale without extra firewall rules.
+- **Secret generation hygiene:** When generating secrets, always suppress
+  stdout to prevent accidental logging. Write directly to files or pipe to
+  sops-secrets.sh without echoing:
+  ```bash
+  # Good - pipe directly to sops (never touches disk unencrypted)
+  ./scripts/sops-secrets.sh secrets/house/core.yaml set my_key "$(openssl rand -hex 32)"
+  
+  # Good - write to secure temp with restricted permissions, then clean up
+  tmpfile=$(mktemp); chmod 600 "$tmpfile"; openssl rand -hex 32 > "$tmpfile"
+  ./scripts/sops-secrets.sh secrets/house/core.yaml set my_key "$(cat "$tmpfile")"
+  rm "$tmpfile"
+  
+  # Bad - visible in terminal and logs
+  echo "$(openssl rand -hex 32)"
+  ```

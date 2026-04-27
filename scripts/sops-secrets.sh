@@ -65,18 +65,45 @@ case "$COMMAND" in
       echo "Error: delete requires key" >&2
       usage
     fi
-    # Decrypt to stdout, filter out key, re-encrypt from stdin
-    # Uses Python to modify YAML in memory (no disk writes of plaintext)
-    sops -d "$SOPS_FILE" | python3 -c "
-import sys, yaml
-data = yaml.safe_load(sys.stdin)
-if '$KEY' in data:
-    del data['$KEY']
-    yaml.dump(data, sys.stdout, default_flow_style=False, sort_keys=False)
+    # Create temp files with restricted permissions
+    tmpdir=$(mktemp -d)
+    chmod 700 "$tmpdir"
+    tmpdec="$tmpdir/decrypted.yaml"
+    tmpmod="$tmpdir/modified.yaml"
+    
+    # Decrypt to temp file (not stdout)
+    sops -d "$SOPS_FILE" > "$tmpdec"
+    
+    # Modify with Python, write to another temp file
+    python3 -c "
+import yaml, sys
+
+with open('$tmpdec', 'r') as f:
+    data = yaml.safe_load(f)
+
+# Handle nested 'data' key (SOPS sometimes wraps content)
+if isinstance(data, dict) and 'data' in data and isinstance(data['data'], str):
+    # Extract inner YAML
+    inner = yaml.safe_load(data['data'])
+    if '$KEY' in inner:
+        del inner['$KEY']
+    # Re-wrap
+    data['data'] = yaml.dump(inner, default_flow_style=False, sort_keys=False)
 else:
-    yaml.dump(data, sys.stdout, default_flow_style=False, sort_keys=False)
-" | sops -e /dev/stdin > "$SOPS_FILE.tmp"
+    if '$KEY' in data:
+        del data['$KEY']
+
+with open('$tmpmod', 'w') as f:
+    yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+"
+    
+    # Re-encrypt from file (preserves YAML format better than stdin)
+    sops -e "$tmpmod" > "$SOPS_FILE.tmp"
     mv "$SOPS_FILE.tmp" "$SOPS_FILE"
+    
+    # Clean up temp files
+    rm -rf "$tmpdir"
+    
     echo "Deleted $KEY from $SOPS_FILE (if it existed)"
     ;;
 
@@ -84,6 +111,9 @@ else:
     sops -d "$SOPS_FILE" | python3 -c "
 import sys, yaml
 data = yaml.safe_load(sys.stdin)
+# Handle nested structure
+if isinstance(data, dict) and 'data' in data and isinstance(data['data'], str):
+    data = yaml.safe_load(data['data'])
 if data:
     for key in data.keys():
         print(key)
