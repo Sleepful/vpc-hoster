@@ -195,7 +195,7 @@ attributes, and invalid option values at build time):
 
 The qBittorrent companion scripts (Python) have a pytest suite:
 ```sh
-just test                    # Run qBittorrent script tests (local, no SSH)
+just qbt-test                # Run qBittorrent script tests (local, no SSH) (alias: just t)
 ```
 See `machines/builder/src/service/qbittorrent/tests/` for the test files.
 
@@ -260,7 +260,7 @@ All infrastructure code is Nix. Shell scripts appear inside Nix heredoc strings
 registration) are standalone Python scripts in
 `machines/builder/src/service/qbittorrent/`. They read configuration from
 environment variables set by systemd, making them independently testable with
-pytest. See the `tests/` subdirectory and `just test`.
+pytest. See the `tests/` subdirectory and `just qbt-test`.
 
 ### File Naming
 
@@ -443,7 +443,7 @@ machines/builder/src/service/qbittorrent/
 Scripts read all configuration from environment variables set by
 `serviceConfig.Environment` in `default.nix`. Only `rclone` and `unar` use
 subprocess — everything else (HTTP, JSON, filesystem, inode lookup) is Python
-stdlib. Run `just test` to execute the pytest suite locally.
+stdlib. Run `just qbt-test` to execute the pytest suite locally.
 
 ### Adding a New Download Category
 

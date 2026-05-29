@@ -1,3 +1,5 @@
+import './just/opencode'
+
 NAME := "builder"
 REMOTE := "/etc/nixos"
 DEPLOY_USER := "jose"
@@ -143,7 +145,8 @@ docker-status target="root@house":
 	@ssh {{target}} 'echo "=== Running Containers ===" && docker ps 2>/dev/null || echo "Docker not running or no containers" && echo && echo "=== All Images ===" && docker images 2>/dev/null || echo "No images"'
 
 # Run qBittorrent script tests (Python, local, no SSH)
-test:
+alias t := qbt-test
+qbt-test:
 	nix-shell -p python3 python3Packages.pytest --run "pytest machines/builder/src/service/qbittorrent/tests/ -v"
 
 SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identities
