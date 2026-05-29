@@ -4,6 +4,7 @@
     [
       ./options/identifiers.nix
       ./identifiers/default.nix
+      ./service/debug.nix
     ]
     ++ lib.optional (builtins.pathExists ../private/identifiers/default.nix)
       ../private/identifiers/default.nix;
