@@ -35,7 +35,7 @@
     ./service/keycloak.nix
     ./service/outline.nix
     ./service/docker.nix
-    ./service/librechat.nix
+    # ./service/librechat.nix  # Deregistered 2026-05-29: librechat + mongo removed
     ./service/monitoring.nix
     ./service/aws.nix
     # ./service/mc-discord.nix  # Disabled 2025-05-29: Rust compilation slow, crates.io 403 on vendoring.

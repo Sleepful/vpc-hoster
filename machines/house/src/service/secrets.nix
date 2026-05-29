@@ -42,18 +42,19 @@ in
     restartUnits = [ "keycloak.service" ];
   };
 
-  sops.secrets.librechat_creds_key = {};
-  sops.secrets.librechat_creds_iv = {};
-  sops.secrets.librechat_jwt_secret = {};
-  sops.secrets.librechat_jwt_refresh_secret = {};
-  sops.secrets.librechat_oidc_secret = {};
-  sops.secrets.librechat_session_secret = {};
+  # Deregistered 2026-05-29: librechat + mongo removed
+  # sops.secrets.librechat_creds_key = {};
+  # sops.secrets.librechat_creds_iv = {};
+  # sops.secrets.librechat_jwt_secret = {};
+  # sops.secrets.librechat_jwt_refresh_secret = {};
+  # sops.secrets.librechat_oidc_secret = {};
+  # sops.secrets.librechat_session_secret = {};
 
-  # API keys for LibreChat endpoints (set via sops-secrets.sh when ready)
-  sops.secrets.moonshot_api_key = {};
-  sops.secrets.deepseek_api_key = {};
-  sops.secrets.exa_api_key = {};
-  sops.secrets.brave_api_key = {};
+  # # API keys for LibreChat endpoints
+  # sops.secrets.moonshot_api_key = {};
+  # sops.secrets.deepseek_api_key = {};
+  # sops.secrets.exa_api_key = {};
+  # sops.secrets.brave_api_key = {};
 
   # Dovecot reads hashes via /run/dovecot2/passwd generated at dovecot start.
   # Restart dovecot automatically when hashes change.
@@ -104,27 +105,28 @@ in
     mode = "0400";
   };
 
-  sops.templates.librechat_env = {
-    content = ''
-      CREDS_KEY=${config.sops.placeholder.librechat_creds_key}
-      CREDS_IV=${config.sops.placeholder.librechat_creds_iv}
-      JWT_SECRET=${config.sops.placeholder.librechat_jwt_secret}
-      JWT_REFRESH_SECRET=${config.sops.placeholder.librechat_jwt_refresh_secret}
-      OPENID_CLIENT_ID=librechat
-      OPENID_CLIENT_SECRET=${config.sops.placeholder.librechat_oidc_secret}
-      OPENID_ISSUER=https://${ids.subdomains.auth}.${ids.domain.root}/realms/master
-      OPENID_SESSION_SECRET=${config.sops.placeholder.librechat_session_secret}
-      OPENID_SCOPE=openid profile email
-      OPENID_CALLBACK_URL=/oauth/openid/callback
-      OPENID_USE_END_SESSION_ENDPOINT=true
-      MOONSHOT_API_KEY=${config.sops.placeholder.moonshot_api_key}
-      DEEPSEEK_API_KEY=${config.sops.placeholder.deepseek_api_key}
-      EXA_API_KEY=${config.sops.placeholder.exa_api_key}
-      BRAVE_API_KEY=${config.sops.placeholder.brave_api_key}
-    '';
-    mode = "0400";
-    restartUnits = [ "librechat.service" ];
-  };
+  # Deregistered 2026-05-29: librechat + mongo removed
+  # sops.templates.librechat_env = {
+  #   content = ''
+  #     CREDS_KEY=${config.sops.placeholder.librechat_creds_key}
+  #     CREDS_IV=${config.sops.placeholder.librechat_creds_iv}
+  #     JWT_SECRET=${config.sops.placeholder.librechat_jwt_secret}
+  #     JWT_REFRESH_SECRET=${config.sops.placeholder.librechat_jwt_refresh_secret}
+  #     OPENID_CLIENT_ID=librechat
+  #     OPENID_CLIENT_SECRET=${config.sops.placeholder.librechat_oidc_secret}
+  #     OPENID_ISSUER=https://${ids.subdomains.auth}.${ids.domain.root}/realms/master
+  #     OPENID_SESSION_SECRET=${config.sops.placeholder.librechat_session_secret}
+  #     OPENID_SCOPE=openid profile email
+  #     OPENID_CALLBACK_URL=/oauth/openid/callback
+  #     OPENID_USE_END_SESSION_ENDPOINT=true
+  #     MOONSHOT_API_KEY=${config.sops.placeholder.moonshot_api_key}
+  #     DEEPSEEK_API_KEY=${config.sops.placeholder.deepseek_api_key}
+  #     EXA_API_KEY=${config.sops.placeholder.exa_api_key}
+  #     BRAVE_API_KEY=${config.sops.placeholder.brave_api_key}
+  #   '';
+  #   mode = "0400";
+  #   restartUnits = [ "librechat.service" ];
+  # };
 
   sops.templates.radicale_users = {
     content = ''

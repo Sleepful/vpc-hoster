@@ -6,16 +6,17 @@ in
   virtualisation.oci-containers.backend = "docker";
 
   # MongoDB for LibreChat (Docker avoids SSPL source compilation)
-  virtualisation.oci-containers.containers.mongodb = {
-    image = "mongo:7";
-    autoStart = true;
-    ports = [ "127.0.0.1:27017:27017" ];
-    volumes = [ "/var/lib/mongodb:/data/db" ];
-    environment = {
-      MONGO_INITDB_DATABASE = "librechat";
-    };
-    extraOptions = [ "--user=999:999" ];
-  };
+  # Deregistered 2026-05-29: librechat + mongo removed
+  # virtualisation.oci-containers.containers.mongodb = {
+  #   image = "mongo:7";
+  #   autoStart = true;
+  #   ports = [ "127.0.0.1:27017:27017" ];
+  #   volumes = [ "/var/lib/mongodb:/data/db" ];
+  #   environment = {
+  #     MONGO_INITDB_DATABASE = "librechat";
+  #   };
+  #   extraOptions = [ "--user=999:999" ];
+  # };
 
   # Local Docker registry for custom app images
   # Push from macOS via SSH tunnel:
@@ -29,15 +30,15 @@ in
     volumes = [ "/var/lib/registry:/var/lib/registry" ];
   };
 
-  users.users.mongodb = {
-    uid = 999;
-    isSystemUser = true;
-    group = "mongodb";
-  };
-  users.groups.mongodb.gid = 999;
+  # users.users.mongodb = {
+  #   uid = 999;
+  #   isSystemUser = true;
+  #   group = "mongodb";
+  # };
+  # users.groups.mongodb.gid = 999;
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/mongodb 0755 mongodb mongodb -"
+    # "d /var/lib/mongodb 0755 mongodb mongodb -"  # Unused 2026-05-29
     "d /var/lib/registry 0755 root root -"
   ];
 }

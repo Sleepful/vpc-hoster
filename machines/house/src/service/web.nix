@@ -8,7 +8,6 @@ let
   extraDomainNames = map fqdn [
     sub.auth
     sub.cal
-    sub.chat
     sub.dex
     sub.docs
     sub.email
