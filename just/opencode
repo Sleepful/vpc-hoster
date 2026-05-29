@@ -1,0 +1,66 @@
+# Secret management
+# Initialize sops config with your age public key
+sops-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+    if [[ ! -f "$KEY_FILE" ]]; then
+        KEY_FILE="$HOME/.age/key.txt"
+    fi
+    if [[ ! -f "$KEY_FILE" ]]; then
+        echo "No age key found. Generate one with: age-keygen -o ~/.config/sops/age/keys.txt" >&2
+        exit 1
+    fi
+    PUBKEY=$(age-keygen -y "$KEY_FILE" | head -1 | tr -d '\n')
+    sed -i '' "s|<your-age-public-key-here>|$PUBKEY|g" .sops.yaml
+    echo "Updated .sops.yaml with age key: $PUBKEY"
+
+secrets-edit:
+    sops secrets.enc.yaml
+
+secrets-dev-edit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f secrets-dev.enc.yaml ]]; then
+        sops secrets-dev.enc.yaml
+    else
+        echo "Creating new encrypted dev secrets file..."
+        echo "# Dev secrets - edit with: just secrets-dev-edit" > secrets-dev.yaml
+        echo "TEST_API_KEY: \"\"" >> secrets-dev.yaml
+        echo "DEBUG: \"false\"" >> secrets-dev.yaml
+        sops --encrypt --in-place secrets-dev.yaml
+        mv secrets-dev.yaml secrets-dev.enc.yaml
+        echo "Created secrets-dev.enc.yaml"
+        echo "Edit it again with: just secrets-dev-edit"
+    fi
+
+env-low:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f secrets-dev.enc.yaml ]]; then
+        sops --decrypt secrets-dev.enc.yaml | awk '/^#/ {next} /^[A-Z]/ {gsub(/: /, "="); gsub(/^ +/, ""); gsub(/"/, ""); print}' > .env.low
+        echo "Generated .env.low from secrets-dev.enc.yaml"
+    else
+        cp .env.low.template .env.low
+        echo "Created .env.low from template (no encrypted dev secrets found)"
+    fi
+
+# Sidecar proxies (no need to remember scripts/run-tests)
+test *ARGS:
+    scripts/run-tests test {{ARGS}}
+
+test-integration:
+    scripts/run-tests test-integration
+
+typecheck:
+    scripts/run-tests typecheck
+
+lint:
+    scripts/run-tests lint
+
+ssh host *ARGS:
+    scripts/run-ssh {{host}} {{ARGS}}
+
+# Docker
+build:
+    docker build -t opencode-agent:latest -f .opencode/Dockerfile . && docker image prune -f
