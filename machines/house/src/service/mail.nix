@@ -120,6 +120,15 @@ in
     );
   };
 
+  #
+  # Radicale CalDAV/CardDAV server
+  #
+  # Auth reuses Dovecot bcrypt hashes from sops. The module's hardening
+  # (PrivateUsers, seccomp ~@privileged, ProtectSystem=strict) prevents
+  # chown/chmod and writing outside StateDirectory. A separate oneshot
+  # service with RuntimeDirectoryPreserve generates the htpasswd file
+  # before Radicale starts, stripping the Dovecot {SCHEME} prefix.
+  #
   services.radicale = {
     enable = true;
     settings.auth = {
@@ -129,11 +138,22 @@ in
     };
   };
 
-  systemd.services.radicale.preStart = ''
-    ${pkgs.gnused}/bin/sed 's/:{[^}]*}/:/' ${config.sops.templates.radicale_users.path} > /run/radicale/htpasswd
-    chown radicale /run/radicale/htpasswd
-    chmod 400 /run/radicale/htpasswd
-  '';
+  systemd.services.radicale-htpasswd = {
+    description = "Generate Radicale htpasswd file";
+    before = [ "radicale.service" ];
+    requiredBy = [ "radicale.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RuntimeDirectory = "radicale";
+      RuntimeDirectoryMode = "0755";
+      RuntimeDirectoryPreserve = true; # Oneshot exits, dir must survive until Radicale reads the file.
+    };
+    script = ''
+      ${pkgs.gnused}/bin/sed 's/:{[^}]*}/:/' ${config.sops.templates.radicale_users.path} > /run/radicale/htpasswd
+      chown radicale /run/radicale/htpasswd
+      chmod 400 /run/radicale/htpasswd
+    '';
+  };
 
   services.nginx.virtualHosts."${fqdn sub.mail}" = {
     useACMEHost = fqdn sub.mail;
@@ -149,7 +169,7 @@ in
     locations."/" = {
       proxyPass = "http://localhost:5232/";
       extraConfig = ''
-        proxy_set_header  X-Script-Name /;
+        proxy_set_header  X-Script-Name "";
         proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_pass_header Authorization;
       '';
