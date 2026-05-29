@@ -24,8 +24,9 @@ in
   sops.secrets.aws_cli_user = {};
   sops.secrets.aws_cli_pass = {};
 
-  sops.secrets.discord_token.owner = "mc-discord";
-  sops.secrets.instance_id.owner = "mc-discord";
+  # Disabled alongside mc-discord service (see config.nix). Uncomment when re-enabling.
+  # sops.secrets.discord_token.owner = "mc-discord";
+  # sops.secrets.instance_id.owner = "mc-discord";
 
   sops.secrets.outline_oidc_secret = {
     owner = "outline";
