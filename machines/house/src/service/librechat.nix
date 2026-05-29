@@ -18,6 +18,9 @@ let
           titleConvo: true
           titleModel: "kimi-k2.6"
           modelDisplayLabel: "Moonshot"
+          addParams:
+            thinking:
+              type: "disabled"
         - name: "DeepSeek"
           apiKey: "''${DEEPSEEK_API_KEY}"
           baseURL: "https://api.deepseek.com/v1"

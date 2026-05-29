@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+/repos/
+
+.env.low
+.env.local
+secrets.dec.*
