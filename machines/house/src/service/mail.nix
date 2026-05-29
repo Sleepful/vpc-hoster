@@ -124,10 +124,16 @@ in
     enable = true;
     settings.auth = {
       type = "htpasswd";
-      htpasswd_filename = config.sops.templates.radicale_users.path;
+      htpasswd_filename = "/run/radicale/htpasswd";
       htpasswd_encryption = "bcrypt";
     };
   };
+
+  systemd.services.radicale.preStart = ''
+    ${pkgs.gnused}/bin/sed 's/:{[^}]*}/:/' ${config.sops.templates.radicale_users.path} > /run/radicale/htpasswd
+    chown radicale /run/radicale/htpasswd
+    chmod 400 /run/radicale/htpasswd
+  '';
 
   services.nginx.virtualHosts."${fqdn sub.mail}" = {
     useACMEHost = fqdn sub.mail;
