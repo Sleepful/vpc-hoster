@@ -56,8 +56,8 @@ def handle_action(payload):
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
     # Decrypt secrets (with caching)
-    env_for_child = get_decrypted_env(repo_root)
-    if not env_for_child:
+    env_for_child, failed = get_decrypted_env(repo_root)
+    if failed:
         return "error: failed to decrypt secrets"
 
     # Collect values for redaction
@@ -92,22 +92,27 @@ def get_decrypted_env(repo_root):
         return cached_env
 
     env_for_child = {}
+    any_exists = False
+    any_failed = False
 
-    # Try to decrypt main secrets
-    decrypt_file(repo_root, "secrets.enc.yaml", env_for_child)
-    
-    # Try to decrypt dev secrets (optional)
-    decrypt_file(repo_root, "secrets-dev.enc.yaml", env_for_child)
+    any_exists = any_exists or os.path.exists(os.path.join(repo_root, "secrets.enc.yaml"))
+    if not decrypt_file(repo_root, "secrets.enc.yaml", env_for_child):
+        any_failed = True
 
-    cached_env = env_for_child
+    any_exists = any_exists or os.path.exists(os.path.join(repo_root, "secrets-dev.enc.yaml"))
+    if not decrypt_file(repo_root, "secrets-dev.enc.yaml", env_for_child):
+        any_failed = True
+
+    failed = any_exists and any_failed
+    cached_env = (env_for_child, failed)
     cached_at = now
-    return env_for_child
+    return cached_env
 
 def decrypt_file(repo_root, filename, target):
     file_path = os.path.join(repo_root, filename)
     
     if not os.path.exists(file_path):
-        return  # Optional file, skip silently
+        return True  # No file to decrypt is not a failure
 
     try:
         result = subprocess.run(
@@ -118,7 +123,7 @@ def decrypt_file(repo_root, filename, target):
         )
         if result.returncode != 0:
             print(f"sops decryption failed for {filename}: {result.stderr}", file=sys.stderr)
-            return
+            return False
 
         # Parse into env object
         for line in result.stdout.split("\n"):
@@ -129,8 +134,10 @@ def decrypt_file(repo_root, filename, target):
                 continue
             key, val = line.split("=", 1)
             target[key] = val
+        return True
     except Exception as e:
         print(f"sops error for {filename}: {e}", file=sys.stderr)
+        return False
 
 # Self-test: crash if source contains forbidden logging patterns
 source = inspect.getsource(inspect.currentframe())
