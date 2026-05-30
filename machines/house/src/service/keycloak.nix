@@ -1,13 +1,28 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 let
   ids = config.homelab.identifiers;
   rootDomain = ids.domain.root;
   sub = ids.subdomains;
   fqdn = name: "${name}.${rootDomain}";
+
+  emailOtpPlugin = pkgs.stdenv.mkDerivation {
+    name = "keycloak-email-otp-authenticator";
+    version = "1.4.2";
+    src = pkgs.fetchurl {
+      url = "https://github.com/for-keycloak/email-otp-authenticator/releases/download/v1.4.2/email-otp-authenticator-v1.4.2-kc-26.5.7.jar";
+      sha256 = "09qpvkipy0984vs74sdppa7y7g4k2yzf8f4alk1ma84sbp6c9swg";
+    };
+    dontUnpack = true;
+    installPhase = ''
+      mkdir -p $out
+      cp $src $out/email-otp-authenticator.jar
+    '';
+  };
 in
 {
   services.keycloak = {
     enable = true;
+    plugins = [ emailOtpPlugin ];
     database = {
       createLocally = true;
       host = "localhost";
