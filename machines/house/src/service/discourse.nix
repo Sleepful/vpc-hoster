@@ -17,6 +17,7 @@ in
     database.ignorePostgresqlVersion = true;
 
     mail.notificationEmailAddress = "noreply@${ids.domain.root}";
+    mail.outgoing.enableStartTLSAuto = false;
 
     admin = {
       email = ids.admin.email;
