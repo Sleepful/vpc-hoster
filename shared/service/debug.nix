@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 let
   ids = config.homelab.identifiers;
   dockerGroup = lib.optional (config.virtualisation.oci-containers.backend or "" == "docker") "docker";
@@ -9,4 +9,28 @@ in
     extraGroups = [ "systemd-journal" ] ++ dockerGroup;
     openssh.authorizedKeys.keys = [ ids.users.deployAuthorizedKey ];
   };
+
+  security.sudo.extraRules = [
+    {
+      users = [ "debug" ];
+      commands = [
+        {
+          command = "${pkgs.systemd}/bin/systemctl";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/systemctl";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "${pkgs.systemd}/bin/journalctl";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/journalctl";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
 }
