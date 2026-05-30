@@ -35,6 +35,7 @@
     ./service/keycloak.nix
     ./service/outline.nix
     ./service/docker.nix
+    ./service/discourse.nix
     # ./service/librechat.nix  # Deregistered 2026-05-29: librechat + mongo removed
     ./service/monitoring.nix
     ./service/aws.nix

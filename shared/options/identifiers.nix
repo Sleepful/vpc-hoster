@@ -62,6 +62,24 @@ with lib;
       tunnel = mkOption { type = types.str; default = "tunnel"; };
     };
 
+    admin = {
+      email = mkOption {
+        type = types.str;
+        example = "admin@example.com";
+      };
+    };
+
+    mural = {
+      root = mkOption {
+        type = types.str;
+        example = "example.net";
+      };
+
+      subdomains = {
+        foro = mkOption { type = types.str; default = "forum"; };
+      };
+    };
+
     qbittorrent.passwordHash = mkOption {
       type = types.str;
       description = "PBKDF2 hash for qBittorrent web UI, including @ByteArray(...) wrapper.";

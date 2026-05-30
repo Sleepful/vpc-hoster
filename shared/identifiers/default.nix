@@ -17,6 +17,10 @@
       deployAuthorizedKey = lib.mkDefault "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample000000000000000000000000000 deploy@example";
     };
 
+    admin = {
+      email = lib.mkDefault "admin@example.com";
+    };
+
     subdomains = {
       acmechallenge = lib.mkDefault "acmechallenge";
       auth = lib.mkDefault "auth";
@@ -32,6 +36,13 @@
       sync = lib.mkDefault "sync";
       torrent = lib.mkDefault "qbit";
       tunnel = lib.mkDefault "tunnel";
+    };
+
+    mural = {
+      root = lib.mkDefault "example.net";
+      subdomains = {
+        foro = lib.mkDefault "forum";
+      };
     };
 
     qbittorrent.passwordHash = lib.mkDefault "@ByteArray(placeholder==:placeholder==)";

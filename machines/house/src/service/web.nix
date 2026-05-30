@@ -19,6 +19,9 @@ let
     sub.torrent
     sub.tunnel
   ];
+
+  muralDomain = ids.mural.root;
+  muralSub = ids.mural.subdomains;
 in
 {
   security.acme.acceptTerms = true;
@@ -37,6 +40,14 @@ in
       (fqdn sub.email)
     ];
   };
+  # Cert for secondary domain — add future subdomains to extraDomainNames here.
+  security.acme.certs."${muralDomain}" = {
+    webroot = acmeWebRoot;
+    group = "nginx";
+    extraDomainNames = [
+      "${muralSub.foro}.${muralDomain}"
+    ];
+  };
 
   users.users.nginx.extraGroups = [ "acme" ];
 
@@ -46,7 +57,7 @@ in
     recommendedTlsSettings = true;
     virtualHosts = {
       "${fqdn sub.acmechallenge}" = {
-        serverAliases = [ "*.${rootDomain}" ];
+        serverAliases = [ "*.${rootDomain}" "*.${muralDomain}" ];
         locations."/.well-known/acme-challenge".root = acmeWebRoot;
         locations."/".return = "301 https://$host$request_uri";
       };

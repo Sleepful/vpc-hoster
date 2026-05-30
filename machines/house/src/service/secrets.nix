@@ -42,6 +42,13 @@ in
     restartUnits = [ "keycloak.service" ];
   };
 
+  sops.secrets.discourse_secret_key_base = {
+    owner = "discourse";
+  };
+  sops.secrets.discourse_admin_password = {
+    owner = "discourse";
+  };
+
   # Deregistered 2026-05-29: librechat + mongo removed
   # sops.secrets.librechat_creds_key = {};
   # sops.secrets.librechat_creds_iv = {};
