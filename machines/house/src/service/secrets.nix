@@ -200,7 +200,11 @@ in
             config:
               localpart_template: "{{ user.preferred_username }}"
               display_name_template: "{{ user.name }}"
-          backchannel_logout_enabled: true
+           backchannel_logout_enabled: true
+
+          # The hermes bot authenticates with a local password (not OIDC) and
+          # is created via CLI before first OIDC login. Without this, OIDC
+          # users and local-password users cannot coexist on the same server.
           allow_existing_users: true
       ${oidcAttributeRequirements}'';
     owner = "matrix-synapse";
