@@ -55,6 +55,7 @@ with lib;
       email = mkOption { type = types.str; default = "email"; };
       grafana = mkOption { type = types.str; default = "grafana"; };
       mail = mkOption { type = types.str; default = "mail"; };
+      matrix = mkOption { type = types.str; default = "matrix"; };
       mini = mkOption { type = types.str; default = "mini"; };
       outline = mkOption { type = types.str; default = "outline"; };
       sync = mkOption { type = types.str; default = "sync"; };

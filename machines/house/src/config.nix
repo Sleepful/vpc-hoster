@@ -41,6 +41,8 @@
     ./service/aws.nix
     # ./service/mc-discord.nix  # Disabled 2025-05-29: Rust compilation slow, crates.io 403 on vendoring.
     #                             # Future fix: build Docker image via GitHub Actions to avoid Nix compilation.
+    ./service/synapse.nix
+    ./service/hermes.nix
     ./service/firewall.nix
   ];
 }

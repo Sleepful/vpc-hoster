@@ -7,9 +7,10 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    hermes-agent.url = "github:NousResearch/hermes-agent";
   };
 
-  outputs = { self, nixpkgs, sops-nix, ... }: {
+  outputs = { self, nixpkgs, sops-nix, hermes-agent, ... }: {
     nixosConfigurations = {
       builder = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -22,6 +23,7 @@
         system = "x86_64-linux";
         modules = [
           sops-nix.nixosModules.sops
+          hermes-agent.nixosModules.default
           ./machines/house/configuration.nix
         ];
       };

@@ -1,6 +1,9 @@
 { config, ... }:
 let
   ids = config.homelab.identifiers;
+  rootDomain = ids.domain.root;
+  sub = ids.subdomains;
+  fqdn = name: "${name}.${rootDomain}";
 in
 {
   sops.defaultSopsFile = ../../../../secrets/house/core.yaml;
@@ -155,6 +158,20 @@ in
       RCLONE_CONFIG_B2_TYPE=b2
       RCLONE_CONFIG_B2_ACCOUNT=${config.sops.placeholder.b2_account_id}
       RCLONE_CONFIG_B2_KEY=${config.sops.placeholder.b2_application_key}
+    '';
+    mode = "0440";
+  };
+
+  sops.secrets.openrouter_api_key = {};
+  sops.secrets.hermes_matrix_password = {};
+
+  sops.templates."hermes-env" = {
+    content = ''
+      OPENROUTER_API_KEY=${config.sops.placeholder.openrouter_api_key}
+      MATRIX_HOMESERVER=https://${fqdn sub.matrix}
+      MATRIX_USER_ID=@hermes:${rootDomain}
+      MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
+      MATRIX_ALLOWED_USERS=@jose:${rootDomain}
     '';
     mode = "0440";
   };

@@ -13,6 +13,7 @@ let
     sub.email
     sub.grafana
     sub.mail
+    sub.matrix
     sub.mini
     sub.outline
     sub.sync
@@ -66,6 +67,27 @@ in
         onlySSL = true;
         useACMEHost = rootDomain;
         locations."/".root = "/var/www";
+        locations."= /.well-known/matrix/server".extraConfig = ''
+          add_header Content-Type application/json;
+          return 200 '{"m.server": "${fqdn sub.matrix}:443"}';
+        '';
+        locations."= /.well-known/matrix/client".extraConfig = ''
+          add_header Content-Type application/json;
+          add_header Access-Control-Allow-Origin *;
+          return 200 '{"m.homeserver": {"base_url": "https://${fqdn sub.matrix}"}}';
+        '';
+      };
+      "${fqdn sub.matrix}" = {
+        onlySSL = true;
+        useACMEHost = rootDomain;
+        locations."/".return = "404";
+        locations."/_matrix" = {
+          proxyPass = "http://[::1]:8008";
+          proxyWebsockets = true;
+        };
+        locations."/_synapse/client" = {
+          proxyPass = "http://[::1]:8008";
+        };
       };
     };
   };

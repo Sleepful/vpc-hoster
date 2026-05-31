@@ -31,6 +31,7 @@
       email = lib.mkDefault "email";
       grafana = lib.mkDefault "grafana";
       mail = lib.mkDefault "mail";
+      matrix = lib.mkDefault "matrix";
       mini = lib.mkDefault "mini";
       outline = lib.mkDefault "outline";
       sync = lib.mkDefault "sync";
