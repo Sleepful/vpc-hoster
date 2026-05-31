@@ -183,9 +183,9 @@ in
       then ''["openid", "profile", "groups"]''
       else ''["openid", "profile"]'';
     oidcAttributeRequirements = if ids.matrix.requiredGroup != null then ''
-        attribute_requirements:
-          - attribute: groups
-            value: ${ids.matrix.requiredGroup}'' else "";
+          attribute_requirements:
+            - attribute: groups
+              value: ${ids.matrix.requiredGroup}'' else "";
   in {
     content = ''
       registration_shared_secret: ${config.sops.placeholder.matrix_registration_secret}
@@ -200,11 +200,9 @@ in
             config:
               localpart_template: "{{ user.preferred_username }}"
               display_name_template: "{{ user.name }}"
-           backchannel_logout_enabled: true
-
-          # The hermes bot authenticates with a local password (not OIDC) and
-          # is created via CLI before first OIDC login. Without this, OIDC
-          # users and local-password users cannot coexist on the same server.
+          backchannel_logout_enabled: true
+          # The hermes bot authenticates with a local password (not OIDC).
+          # Without this, OIDC and local-password users cannot coexist.
           allow_existing_users: true
       ${oidcAttributeRequirements}'';
     owner = "matrix-synapse";
