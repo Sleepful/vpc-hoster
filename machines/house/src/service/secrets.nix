@@ -179,9 +179,6 @@ in
   };
 
   sops.templates."synapse-extra" = let
-    oidcScopes = if ids.matrix.requiredGroup != null
-      then ''["openid", "profile", "groups"]''
-      else ''["openid", "profile"]'';
     oidcAttributeRequirements = if ids.matrix.requiredGroup != null then ''
           attribute_requirements:
             - attribute: groups
@@ -195,7 +192,7 @@ in
           issuer: https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}
           client_id: synapse
           client_secret: ${config.sops.placeholder.matrix_oidc_client_secret}
-          scopes: ${oidcScopes}
+          scopes: ["openid", "profile"]
           user_mapping_provider:
             config:
               localpart_template: "{{ user.preferred_username }}"
