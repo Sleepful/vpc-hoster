@@ -65,5 +65,10 @@
       dexAtlasUsername = lib.mkDefault "atlas";
       dexLumenUsername = lib.mkDefault "lumen";
     };
+
+    matrix = {
+      keycloakRealm = lib.mkDefault "master";
+      requiredGroup = lib.mkDefault null;
+    };
   };
 }

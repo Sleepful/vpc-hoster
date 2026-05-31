@@ -4,6 +4,29 @@ let
   rootDomain = ids.domain.root;
   sub = ids.subdomains;
   fqdn = name: "${name}.${rootDomain}";
+
+  oidcGroupRequires = ids.matrix.requiredGroup != null;
+  oidcProvider = {
+    idp_id = "keycloak";
+    idp_name = "Keycloak";
+    issuer = "https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}";
+    client_id = "synapse";
+    scopes = ["openid" "profile"]
+      ++ lib.optionals oidcGroupRequires ["groups"];
+    user_mapping_provider.config = {
+      localpart_template = "{{ user.preferred_username }}";
+      display_name_template = "{{ user.name }}";
+    };
+    backchannel_logout_enabled = true;
+    allow_existing_users = true;
+  } // lib.optionalAttrs oidcGroupRequires {
+    attribute_requirements = [
+      {
+        attribute = "groups";
+        value = ids.matrix.requiredGroup;
+      }
+    ];
+  };
 in
 {
   services.matrix-synapse = {
@@ -52,21 +75,7 @@ in
         "fc00::/7"
       ];
 
-      oidc_providers = [
-        {
-          idp_id = "keycloak";
-          idp_name = "Keycloak";
-          issuer = "https://${fqdn sub.auth}/realms/master";
-          client_id = "synapse";
-          scopes = [ "openid" "profile" ];
-          user_mapping_provider.config = {
-            localpart_template = "{{ user.preferred_username }}";
-            display_name_template = "{{ user.name }}";
-          };
-          backchannel_logout_enabled = true;
-          allow_existing_users = true;
-        }
-      ];
+      oidc_providers = [ oidcProvider ];
     };
 
     extraConfigFiles = [

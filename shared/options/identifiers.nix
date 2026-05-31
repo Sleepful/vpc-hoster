@@ -164,5 +164,19 @@ with lib;
         default = "lumen";
       };
     };
+
+    matrix = {
+      keycloakRealm = mkOption {
+        type = types.str;
+        default = "master";
+        description = "Keycloak realm used for Matrix OIDC authentication.";
+      };
+
+      requiredGroup = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Keycloak group required for Matrix login. null disables the check.";
+      };
+    };
   };
 }
