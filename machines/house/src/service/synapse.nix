@@ -16,9 +16,10 @@ in
       public_baseurl = "https://${fqdn sub.matrix}";
 
       database.name = "psycopg2";
+      # The NixOS module auto-populates `database` in args, so declaring
+      # `dbname` here creates a conflict (psycopg2 rejects both aliases).
       database.args = {
         user = "matrix-synapse";
-        dbname = "matrix-synapse";
         host = "/run/postgresql";
       };
 
