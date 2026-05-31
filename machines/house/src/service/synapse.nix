@@ -21,7 +21,6 @@ in
         database = "matrix-synapse";
         host = "/run/postgresql";
       };
-      database.allow_unsafe_locale = true;
 
       listeners = [
         {
