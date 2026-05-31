@@ -8,6 +8,7 @@ in
 {
   services.matrix-synapse = {
     enable = true;
+    extras = ["oidc"];
     enableRegistrationScript = true;
 
     settings = {
