@@ -178,13 +178,31 @@ in
     mode = "0440";
   };
 
-  sops.templates."synapse-extra" = {
+  sops.templates."synapse-extra" = let
+    oidcScopes = if ids.matrix.requiredGroup != null
+      then ''["openid", "profile", "groups"]''
+      else ''["openid", "profile"]'';
+    oidcAttributeRequirements = if ids.matrix.requiredGroup != null then ''
+        attribute_requirements:
+          - attribute: groups
+            value: ${ids.matrix.requiredGroup}'' else "";
+  in {
     content = ''
       registration_shared_secret: ${config.sops.placeholder.matrix_registration_secret}
       oidc_providers:
         - idp_id: keycloak
+          idp_name: Keycloak
+          issuer: https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}
+          client_id: synapse
           client_secret: ${config.sops.placeholder.matrix_oidc_client_secret}
-    '';
+          scopes: ${oidcScopes}
+          user_mapping_provider:
+            config:
+              localpart_template: "{{ user.preferred_username }}"
+              display_name_template: "{{ user.name }}"
+          backchannel_logout_enabled: true
+          allow_existing_users: true
+      ${oidcAttributeRequirements}'';
     owner = "matrix-synapse";
     mode = "0400";
   };
