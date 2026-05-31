@@ -9,5 +9,6 @@
     environmentFiles = [ config.sops.templates."hermes-env".path ];
     addToSystemPackages = true;
     extraPackages = with pkgs; [ jq curl ];
+    extraDependencyGroups = [ "matrix" ];
   };
 }
