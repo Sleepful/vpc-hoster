@@ -162,17 +162,30 @@ in
     mode = "0440";
   };
 
-  sops.secrets.openrouter_api_key = {};
+  sops.secrets.deepseek_api_key = {};
   sops.secrets.hermes_matrix_password = {};
+  sops.secrets.matrix_oidc_client_secret = {};
+  sops.secrets.matrix_registration_secret = {};
 
   sops.templates."hermes-env" = {
     content = ''
-      OPENROUTER_API_KEY=${config.sops.placeholder.openrouter_api_key}
+      DEEPSEEK_API_KEY=${config.sops.placeholder.deepseek_api_key}
       MATRIX_HOMESERVER=https://${fqdn sub.matrix}
       MATRIX_USER_ID=@hermes:${rootDomain}
       MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
     '';
     mode = "0440";
+  };
+
+  sops.templates."synapse-extra" = {
+    content = ''
+      registration_shared_secret: ${config.sops.placeholder.matrix_registration_secret}
+      oidc_providers:
+        - idp_id: keycloak
+          client_secret: ${config.sops.placeholder.matrix_oidc_client_secret}
+    '';
+    owner = "matrix-synapse";
+    mode = "0400";
   };
 }

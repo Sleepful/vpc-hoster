@@ -2,7 +2,10 @@
 {
   services.hermes-agent = {
     enable = true;
-    settings.model.default = "anthropic/claude-sonnet-4";
+    settings.model = {
+      base_url = "https://api.deepseek.com/v1";
+      default = "deepseek-chat";
+    };
     environmentFiles = [ config.sops.templates."hermes-env".path ];
     addToSystemPackages = true;
     extraPackages = with pkgs; [ jq curl ];
