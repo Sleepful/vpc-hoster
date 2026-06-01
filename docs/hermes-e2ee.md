@@ -78,12 +78,33 @@ sudo -u hermes HERMES_HOME=/var/lib/hermes/.hermes \
 Skills install to `~/.hermes/skills/<name>/` and survive NixOS rebuilds
 (the `ReadWritePaths=/var/lib/hermes` systemd hardening allows writes here).
 
+**Important:** GitHub-source installs preserve the category structure:
+`skills/<category>/<name>/SKILL.md`. Hermes's `skills_list` only scans one level
+deep (`skills/<name>/SKILL.md`), so the skill won't appear in listings. Move it
+up one level after install:
+
+```bash
+sudo mv /var/lib/hermes/.hermes/skills/<category>/<name> /var/lib/hermes/.hermes/skills/<name>
+sudo rm -rf /var/lib/hermes/.hermes/skills/<category>
+```
+
+Then type `/reset` in the chat to reload the skill index.
+
 ### Why `official/<category>/<name>` may not work
 
-The `official/` registry alias uses a cached index that may not include skills
-added after the hermes-agent release version. The GitHub source path
-(`owner/repo/optional-skills/...`) fetches directly from the GitHub Contents API
-and always works.
+Two reasons:
+
+1. The `official/` registry alias uses `OptionalSkillSource`, which reads from
+   the local hermes-agent source tree (where `optional-skills/` lives). The Nix
+   package only ships `skills/` (bundled) — `optional-skills/` doesn't exist in
+   the Nix store path, so `OptionalSkillSource` finds nothing.
+
+2. Even when `skills browse --source official` works (it fetches from the
+   GitHub API), the `install` path for `official/<category>/<name>` may resolve
+   through `OptionalSkillSource` first, which fails on NixOS.
+
+The GitHub source path (`owner/repo/optional-skills/<category>/<name>`)
+bypasses both issues by fetching directly from the GitHub Contents API.
 
 ### Browsing available skills
 
