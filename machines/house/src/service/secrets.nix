@@ -176,6 +176,7 @@ in
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
+      MATRIX_RECOVERY_KEY=EsTR wiwm sNoE NJ9Q 1bbk Ss4W Lo9g J6aK gx8m BXvh 5UFQ b7Rm
     '';
     mode = "0440";
   };
