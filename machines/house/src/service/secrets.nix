@@ -195,7 +195,7 @@ in
           scopes: ["openid", "profile"]
           user_mapping_provider:
             config:
-              localpart_template: "{{ user.preferred_username }}"
+              localpart_template: "{{ user.preferred_username.split('@')[0] }}"
               display_name_template: "{{ user.name }}"
           backchannel_logout_enabled: true
           # The hermes bot authenticates with a local password (not OIDC).
