@@ -34,6 +34,10 @@
         model = "deepseek-v4-pro";
         provider = "custom:deepseek";
       };
+      v4flash = {
+        model = "deepseek-v4-flash";
+        provider = "custom:deepseek";
+      };
       chat = {
         model = "deepseek-chat";
         provider = "custom:deepseek";
