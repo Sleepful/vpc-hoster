@@ -31,7 +31,7 @@ in
           x_forwarded = true;
           resources = [
             {
-              names = [ "client" "federation" ];
+              names = [ "client" ];
               compress = false;
             }
           ];
@@ -39,6 +39,10 @@ in
       ];
 
       enable_registration = false;
+
+      # Federation is disabled — homelab is a private island.
+      # See docs/matrix-federation.md for the dual-instance plan.
+      federation_domain_whitelist = [];
 
       url_preview_enabled = true;
       url_preview_ip_range_blacklist = [

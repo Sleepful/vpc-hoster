@@ -67,10 +67,6 @@ in
         onlySSL = true;
         useACMEHost = rootDomain;
         locations."/".root = "/var/www";
-        locations."= /.well-known/matrix/server".extraConfig = ''
-          add_header Content-Type application/json;
-          return 200 '{"m.server": "${fqdn sub.matrix}:443"}';
-        '';
         locations."= /.well-known/matrix/client".extraConfig = ''
           add_header Content-Type application/json;
           add_header Access-Control-Allow-Origin *;
