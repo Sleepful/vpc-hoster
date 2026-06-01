@@ -10,5 +10,11 @@
     addToSystemPackages = true;
     extraPackages = with pkgs; [ jq curl ];
     extraDependencyGroups = [ "matrix" ];
+
+    settings.gateway.platforms.matrix.enabled = true;
+    settings.matrix = {
+      require_mention = true;
+      auto_thread = false;
+    };
   };
 }
