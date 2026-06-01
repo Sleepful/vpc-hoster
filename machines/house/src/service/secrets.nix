@@ -173,7 +173,7 @@ in
       MATRIX_HOMESERVER=https://${fqdn sub.matrix}
       MATRIX_USER_ID=@hermes:${rootDomain}
       MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
-      MATRIX_ALLOWED_USERS=@josepablov:${rootDomain}
+      MATRIX_ALLOWED_USERS=@jose:${rootDomain}
     '';
     mode = "0440";
   };
