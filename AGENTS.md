@@ -199,9 +199,47 @@ just qbt-test                # Run qBittorrent script tests (local, no SSH) (ali
 ```
 See `machines/builder/src/service/qbittorrent/tests/` for the test files.
 
-**Deployment is the user's responsibility.** Do not run `just deploy` or
-`just deploy-remote` unless the user explicitly asks. Prepare changes, run
-`just syntax` or `just check`, and let the user decide when to deploy.
+**Deployment is the user's responsibility.** The user handles all deploys.
+Never run `just deploy`, `just deploy-remote`, `just deploy-local-house`,
+`nixos-rebuild`, or any deployment command. Never ask if the user wants to
+deploy or when they will deploy. Prepare changes, run `just syntax` or
+`just check` to validate, and stop. The user decides when and how to deploy.
+
+## Remote Command Execution (Sidecar)
+
+Two scripts for running commands on remote machines. Use the correct one.
+
+**Never print secrets to terminal.** When checking values of tokens, passwords,
+API keys, or recovery keys, ask the user to verify — never `cat`, `grep`, or
+`echo` secrets in log output.
+
+### `run-ssh` — primary remote access
+
+Use for routine operations: `sudo systemctl`, `sudo journalctl`, reading files,
+running commands on deployed machines. Connects as the restricted `debug` user
+over SSH. Sudo may require a password.
+
+```bash
+run-ssh house "sudo journalctl -u hermes-agent --no-pager -n 20"
+run-ssh house "sudo systemctl status matrix-synapse"
+run-ssh house "sudo systemctl stop hermes-agent"
+```
+
+### `run-privileged` — high-admin only
+
+Runs commands on the **host machine** with access to decrypted secrets. Use only
+when `run-ssh` fails — the `debug` user cannot `sudo`, while `run-privileged`
+SSHes as a user who can. Also used for operations that genuinely require secrets
+(generating tokens, accessing encrypted values).
+
+```bash
+run-privileged ssh jose@house "sudo some-command"  # when run-ssh can't sudo
+```
+
+**Rule:** If the command starts with `sudo systemctl` or `sudo journalctl`,
+use `run-ssh`. For any other `sudo ...` command, use `run-privileged`.
+Example: `sudo -u postgres psql`, `sudo rm`, `sudo cat` — all go through
+`run-privileged`.
 
 ## Procedures
 
