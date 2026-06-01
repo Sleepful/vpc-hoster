@@ -174,6 +174,8 @@ in
       MATRIX_USER_ID=@hermes:${rootDomain}
       MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
+      MATRIX_ENCRYPTION=true
+      MATRIX_DEVICE_ID=HERMES_BOT
     '';
     mode = "0440";
   };
