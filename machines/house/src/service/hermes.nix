@@ -4,7 +4,7 @@
     enable = true;
     settings.model = {
       base_url = "https://api.deepseek.com/v1";
-      default = "deepseek-chat";
+      default = "deepseek-v4-flash";
     };
     environmentFiles = [ config.sops.templates."hermes-env".path ];
     addToSystemPackages = true;
@@ -25,7 +25,7 @@
       name = "deepseek";
       base_url = "https://api.deepseek.com/v1";
       key_env = "DEEPSEEK_API_KEY";
-      default_model = "deepseek-chat";
+      default_model = "deepseek-v4-flash";
     }];
 
     # Model aliases: /v4pro switches to the smarter model, /chat switches back
@@ -39,7 +39,7 @@
         provider = "custom:deepseek";
       };
       chat = {
-        model = "deepseek-chat";
+        model = "deepseek-v4-flash";
         provider = "custom:deepseek";
       };
     };
