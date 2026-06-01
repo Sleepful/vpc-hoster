@@ -177,7 +177,6 @@ in
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
-      MATRIX_RECOVERY_KEY=${config.sops.placeholder.hermes_matrix_recovery_key}
     '';
     mode = "0440";
   };
