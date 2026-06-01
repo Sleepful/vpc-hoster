@@ -40,6 +40,11 @@ in
 
       enable_registration = false;
 
+      # Homelab is a private island — no user directory browsing,
+      # no profile lookups between users who don't share a room.
+      enable_room_list_search = false;
+      limit_profile_requests_to_users_who_share_rooms = true;
+
       # Federation is disabled — homelab is a private island.
       # See docs/matrix-federation.md for the dual-instance plan.
       federation_domain_whitelist = [];
