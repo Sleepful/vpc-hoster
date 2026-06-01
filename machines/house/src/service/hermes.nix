@@ -27,5 +27,17 @@
       key_env = "DEEPSEEK_API_KEY";
       default_model = "deepseek-chat";
     }];
+
+    # Model aliases: /v4pro switches to the smarter model, /chat switches back
+    settings.model_aliases = {
+      v4pro = {
+        model = "deepseek-v4-pro";
+        provider = "custom:deepseek";
+      };
+      chat = {
+        model = "deepseek-chat";
+        provider = "custom:deepseek";
+      };
+    };
   };
 }
