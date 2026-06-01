@@ -53,3 +53,50 @@ MATRIX_DEVICE_ID=HERMES_BOT
 | `signed_curve25519:XXX already exists` | OTK ID collision (stale keys) | Delete OTKs from DB, restart |
 | `matrix failed to connect` | Generic connection failure | Check logs for root cause above |
 | `recovery key verification failed` | Recovery key doesn't match SSSS | Re-reset cross-signing, capture fresh key |
+
+## Skills Management
+
+### Installing optional skills
+
+Official optional skills (e.g., `watchers`) are in the hermes-agent repo at
+`optional-skills/<category>/<name>/`. They are NOT in the Nix package — the
+`hermes-agent` derivation only bundles `skills/` (built-in), not `optional-skills/`.
+
+On NixOS, install optional skills via the CLI as the `hermes` user:
+
+```bash
+sudo -u hermes HERMES_HOME=/var/lib/hermes/.hermes \
+  hermes skills install <owner>/<repo>/optional-skills/<category>/<name> --yes
+```
+
+Example — install the watchers (RSS polling) skill:
+```bash
+sudo -u hermes HERMES_HOME=/var/lib/hermes/.hermes \
+  hermes skills install NousResearch/hermes-agent/optional-skills/devops/watchers --yes
+```
+
+Skills install to `~/.hermes/skills/<name>/` and survive NixOS rebuilds
+(the `ReadWritePaths=/var/lib/hermes` systemd hardening allows writes here).
+
+### Why `official/<category>/<name>` may not work
+
+The `official/` registry alias uses a cached index that may not include skills
+added after the hermes-agent release version. The GitHub source path
+(`owner/repo/optional-skills/...`) fetches directly from the GitHub Contents API
+and always works.
+
+### Browsing available skills
+
+```bash
+# List all official optional skills (86 as of May 2026)
+sudo -u hermes HERMES_HOME=/var/lib/hermes/.hermes hermes skills browse --source official
+
+# Search for a specific skill
+sudo -u hermes HERMES_HOME=/var/lib/hermes/.hermes hermes skills search rss
+```
+
+### Security scans
+
+All hub-installed skills go through a security scanner. Official skills get
+built-in trust but still flag on certain patterns (env var reads, token
+references). Use `--yes` to accept the scan results during install.
