@@ -16,5 +16,16 @@
       require_mention = false;
       auto_thread = false;
     };
+
+    # Register DeepSeek as a named provider so /model slash commands
+    # can switch between models (e.g. /model deepseek/deepseek-v4-pro).
+    # key_env tells hermes to read the API key from the DEEPSEEK_API_KEY
+    # env var set via the .env file (sops template).
+    settings.custom_providers = [{
+      name = "deepseek";
+      base_url = "https://api.deepseek.com/v1";
+      key_env = "DEEPSEEK_API_KEY";
+      default_model = "deepseek-chat";
+    }];
   };
 }
