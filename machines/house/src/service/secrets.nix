@@ -166,6 +166,7 @@ in
   sops.secrets.hermes_matrix_password = {};
   sops.secrets.matrix_oidc_client_secret = {};
   sops.secrets.matrix_registration_secret = {};
+  sops.secrets.hermes_matrix_recovery_key = {};
 
   sops.templates."hermes-env" = {
     content = ''
@@ -176,7 +177,7 @@ in
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
-      MATRIX_RECOVERY_KEY=EsTR wiwm sNoE NJ9Q 1bbk Ss4W Lo9g J6aK gx8m BXvh 5UFQ b7Rm
+      MATRIX_RECOVERY_KEY=${config.sops.placeholder.hermes_matrix_recovery_key}
     '';
     mode = "0440";
   };
