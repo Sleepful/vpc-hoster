@@ -176,6 +176,7 @@ in
       MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
       MATRIX_RECOVERY_KEY=${config.sops.placeholder.hermes_matrix_recovery_key}
+      MATRIX_HOME_ROOM=!UjlQNEMevrUkiPgtzm:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
     '';
