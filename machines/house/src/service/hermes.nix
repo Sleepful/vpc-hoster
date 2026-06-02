@@ -13,7 +13,7 @@
 
     settings.gateway.platforms.matrix.enabled = true;
     settings.matrix = {
-      require_mention = false;
+      require_mention = true;
       auto_thread = false;
     };
 
