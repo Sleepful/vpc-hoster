@@ -169,6 +169,14 @@ in
   sops.secrets.hermes_matrix_recovery_key = {};
   sops.secrets.mattermost_token = {};
   sops.secrets.mattermost_allowed_users = {};
+  sops.secrets.mattermost_oidc_secret = {};
+
+  sops.templates."mattermost-oidc-env" = {
+    content = ''
+      MM_OPENIDSETTINGS_CLIENTSECRET=${config.sops.placeholder.mattermost_oidc_secret}
+    '';
+    mode = "0400";
+  };
 
   sops.templates."hermes-env" = {
     content = ''

@@ -12,6 +12,19 @@ in
     listenAddress = "127.0.0.1:8065";
     mutableConfig = true;
     database.driver = "postgres";
+    environmentFile = config.sops.templates."mattermost-oidc-env".path;
+
+    settings = {
+      OpenIdSettings = {
+        Enable = true;
+        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}/.well-known/openid-configuration";
+        ClientId = "mattermost";
+        # ClientSecret set via environmentFile (sops) to avoid Nix store
+        ButtonText = "Login with Keycloak";
+        ButtonColor = "#ADD015";
+        Scope = "openid profile email";
+      };
+    };
   };
 
   services.nginx.virtualHosts."${fqdn sub.mm}" = {
