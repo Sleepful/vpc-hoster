@@ -17,7 +17,7 @@ in
     settings = {
       OpenIdSettings = {
         Enable = true;
-        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}/.well-known/openid-configuration";
+        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
         ClientId = "mattermost";
         # ClientSecret set via environmentFile (sops) to avoid Nix store
         ButtonText = "Login with Keycloak";

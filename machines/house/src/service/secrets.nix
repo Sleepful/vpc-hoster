@@ -208,7 +208,7 @@ in
       oidc_providers:
         - idp_id: keycloak
           idp_name: Keycloak
-          issuer: https://${fqdn sub.auth}/realms/${ids.matrix.keycloakRealm}
+          issuer: https://${fqdn sub.auth}/realms/${ids.keycloakRealm}
           client_id: synapse
           client_secret: ${config.sops.placeholder.matrix_oidc_client_secret}
           scopes: ["openid", "profile"]

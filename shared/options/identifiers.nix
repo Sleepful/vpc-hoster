@@ -166,13 +166,13 @@ with lib;
       };
     };
 
-    matrix = {
-      keycloakRealm = mkOption {
-        type = types.str;
-        default = "master";
-        description = "Keycloak realm used for Matrix OIDC authentication.";
-      };
+    keycloakRealm = mkOption {
+      type = types.str;
+      default = "master";
+      description = "Keycloak realm used for OIDC authentication (Matrix, Mattermost, Discourse).";
+    };
 
+    matrix = {
       requiredGroup = mkOption {
         type = types.nullOr types.str;
         default = null;
