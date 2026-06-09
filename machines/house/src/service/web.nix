@@ -15,6 +15,7 @@ let
     sub.mail
     sub.matrix
     sub.mini
+    sub.mm
     sub.outline
     sub.sync
     sub.torrent
