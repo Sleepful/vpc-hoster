@@ -71,4 +71,5 @@
     matrix = {
       requiredGroup = lib.mkDefault null;
     };
+  };
 }

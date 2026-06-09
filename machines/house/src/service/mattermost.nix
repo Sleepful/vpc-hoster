@@ -9,7 +9,7 @@ in
   services.mattermost = {
     enable = true;
     siteUrl = "https://${fqdn sub.mm}";
-    listenAddress = "127.0.0.1:8065";
+    host = "127.0.0.1";
     mutableConfig = true;
     database.driver = "postgres";
     environmentFile = config.sops.templates."mattermost-oidc-env".path;
