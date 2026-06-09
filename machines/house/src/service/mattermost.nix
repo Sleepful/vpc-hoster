@@ -15,11 +15,17 @@ in
     environmentFile = config.sops.templates."mattermost-oidc-env".path;
 
     settings = {
+      ServiceSettings = {
+        TrustedProxyIPHeader = [
+          "X-Forwarded-For"
+          "X-Real-IP"
+        ];
+      };
       OpenIdSettings = {
-        Enable = true;
-        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
-        ClientId = "mattermost";
-        # ClientSecret set via environmentFile (sops) to avoid Nix store
+        Enable = false;
+        # DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
+        # Id = "mattermost";
+        # Secret set via environmentFile (sops) to avoid Nix store
         ButtonText = "Login with Keycloak";
         ButtonColor = "#ADD015";
         Scope = "openid profile email";
