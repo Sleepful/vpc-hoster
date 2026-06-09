@@ -14,6 +14,7 @@ ACTIONS = {
     # "test-integration": {"command": ["pytest", "-m", "integration"], "description": "Integration tests with real APIs"},
     # "typecheck": {"command": ["tsc", "--noEmit"], "description": "Type check"},
     # "lint": {"command": ["eslint", "."], "description": "Lint"},
+    "check-house": {"command": ["just", "check", "house"], "description": "Full flake eval for house"},
     "ssh": {
         "user": "debug",
         "description": "SSH to remote server as restricted user"
