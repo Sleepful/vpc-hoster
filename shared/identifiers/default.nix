@@ -69,5 +69,6 @@
     keycloakRealm = lib.mkDefault "master";
 
     matrix = {
-  };
+      requiredGroup = lib.mkDefault null;
+    };
 }
