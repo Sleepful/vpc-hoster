@@ -11,7 +11,6 @@ in
     siteUrl = "https://${fqdn sub.mm}";
     listenAddress = "127.0.0.1:8065";
     mutableConfig = true;
-    preferNixConfig = true;
     database.driver = "postgres";
   };
 
