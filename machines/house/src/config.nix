@@ -43,6 +43,7 @@
     #                             # Future fix: build Docker image via GitHub Actions to avoid Nix compilation.
     ./service/synapse.nix
     ./service/hermes.nix
+    ./service/mattermost.nix
     ./service/firewall.nix
   ];
 }

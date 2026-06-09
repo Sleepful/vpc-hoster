@@ -57,6 +57,7 @@ with lib;
       mail = mkOption { type = types.str; default = "mail"; };
       matrix = mkOption { type = types.str; default = "matrix"; };
       mini = mkOption { type = types.str; default = "mini"; };
+      mm = mkOption { type = types.str; default = "mm"; };
       outline = mkOption { type = types.str; default = "outline"; };
       sync = mkOption { type = types.str; default = "sync"; };
       torrent = mkOption { type = types.str; default = "torrent"; };

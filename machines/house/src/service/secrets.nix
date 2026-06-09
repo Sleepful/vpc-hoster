@@ -167,6 +167,8 @@ in
   sops.secrets.matrix_oidc_client_secret = {};
   sops.secrets.matrix_registration_secret = {};
   sops.secrets.hermes_matrix_recovery_key = {};
+  sops.secrets.mattermost_token = {};
+  sops.secrets.mattermost_allowed_users = {};
 
   sops.templates."hermes-env" = {
     content = ''
@@ -180,6 +182,9 @@ in
       MATRIX_HOME_ROOM=!UjlQNEMevrUkiPgtzm:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
+      MATTERMOST_URL=https://${fqdn sub.mm}
+      MATTERMOST_TOKEN=${config.sops.placeholder.mattermost_token}
+      MATTERMOST_ALLOWED_USERS=${config.sops.placeholder.mattermost_allowed_users}
     '';
     mode = "0440";
   };
