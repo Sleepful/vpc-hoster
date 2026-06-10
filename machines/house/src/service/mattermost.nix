@@ -21,12 +21,15 @@ in
           "X-Real-IP"
         ];
       };
-      OpenIdSettings = {
+      GitLabSettings = {
         Enable = true;
-        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
         Id = "mattermost";
-        # Secret set via environmentFile (sops) to avoid Nix store
-        Scope = "openid profile email";
+        Secret = "";
+        Scope = "";
+        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
+        AuthEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/auth";
+        TokenEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/token";
+        UserAPIEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/userinfo";
         ButtonText = "Login with Keycloak";
         ButtonColor = "#ADD015";
       };
