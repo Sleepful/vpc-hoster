@@ -173,7 +173,7 @@ in
 
   sops.templates."mattermost-oidc-env" = {
     content = ''
-      MM_OPENIDSETTINGS_CLIENTSECRET=${config.sops.placeholder.mattermost_oidc_secret}
+      MM_OPENIDSETTINGS_SECRET=${config.sops.placeholder.mattermost_oidc_secret}
     '';
     mode = "0400";
   };
