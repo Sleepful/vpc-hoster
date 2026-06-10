@@ -25,7 +25,7 @@ in
         Enable = true;
         Id = "mattermost";
         # Secret set via environmentFile (sops)
-        Scope = "";
+        Scope = "openid";
         DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
         AuthEndpoint = "";
         TokenEndpoint = "";
