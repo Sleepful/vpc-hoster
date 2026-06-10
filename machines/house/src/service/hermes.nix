@@ -12,6 +12,7 @@
     extraDependencyGroups = [ "matrix" ];
 
     settings.gateway.platforms.matrix.enabled = true;
+    settings.gateway.platforms.mattermost.enabled = true;
     settings.matrix = {
       require_mention = true;
       auto_thread = false;
