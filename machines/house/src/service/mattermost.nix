@@ -24,12 +24,12 @@ in
       GitLabSettings = {
         Enable = true;
         Id = "mattermost";
-        Secret = "";
+        # Secret set via environmentFile (sops)
         Scope = "";
-        DiscoveryEndpoint = "";
-        AuthEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/auth";
-        TokenEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/token";
-        UserAPIEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/userinfo";
+        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
+        AuthEndpoint = "";
+        TokenEndpoint = "";
+        UserAPIEndpoint = "";
         ButtonText = "Login with Keycloak";
         ButtonColor = "#ADD015";
       };
