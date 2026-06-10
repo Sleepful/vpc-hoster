@@ -167,8 +167,8 @@ in
   sops.secrets.matrix_oidc_client_secret = {};
   sops.secrets.matrix_registration_secret = {};
   sops.secrets.hermes_matrix_recovery_key = {};
-  sops.secrets.mattermost_token = {};
-  sops.secrets.mattermost_allowed_users = {};
+  sops.secrets.hermes_mattermost_token = {};
+  sops.secrets.hermes_mattermost_allowed_users = {};
   sops.secrets.mattermost_oidc_secret = {};
 
   sops.templates."mattermost-oidc-env" = {
@@ -186,13 +186,13 @@ in
       MATRIX_PASSWORD=${config.sops.placeholder.hermes_matrix_password}
       MATRIX_ALLOWED_USERS=@jose:${rootDomain}
       MATRIX_RECOVERY_KEY=${config.sops.placeholder.hermes_matrix_recovery_key}
-      HERMES_STREAM_STALE_TIMEOUT=350
+      HERMES_STREAM_STALE_TIMEOUT=300
       MATRIX_HOME_ROOM=!UjlQNEMevrUkiPgtzm:${rootDomain}
       MATRIX_ENCRYPTION=true
       MATRIX_DEVICE_ID=HERMES_BOT
       MATTERMOST_URL=https://${fqdn sub.mm}
-      MATTERMOST_TOKEN=${config.sops.placeholder.mattermost_token}
-      MATTERMOST_ALLOWED_USERS=${config.sops.placeholder.mattermost_allowed_users}
+      MATTERMOST_TOKEN=${config.sops.placeholder.hermes_mattermost_token}
+      MATTERMOST_ALLOWED_USERS=${config.sops.placeholder.hermes_mattermost_allowed_users}
     '';
     mode = "0440";
   };
