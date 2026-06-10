@@ -25,8 +25,8 @@ in
         Enable = true;
         Id = "mattermost";
         Secret = "";
-        Scope = "openid";
-        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
+        Scope = "";
+        DiscoveryEndpoint = "";
         AuthEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/auth";
         TokenEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/token";
         UserAPIEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/protocol/openid-connect/userinfo";
