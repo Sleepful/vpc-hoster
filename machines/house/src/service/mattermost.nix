@@ -22,13 +22,13 @@ in
         ];
       };
       OpenIdSettings = {
-        Enable = false;
-        # DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
-        # Id = "mattermost";
+        Enable = true;
+        DiscoveryEndpoint = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
+        Id = "mattermost";
         # Secret set via environmentFile (sops) to avoid Nix store
+        Scope = "openid profile email";
         ButtonText = "Login with Keycloak";
         ButtonColor = "#ADD015";
-        Scope = "openid profile email";
       };
     };
   };
