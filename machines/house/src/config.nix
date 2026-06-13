@@ -45,6 +45,6 @@
     ./service/hermes.nix
     ./service/mattermost.nix
     ./service/firewall.nix
-    ./service/odysseus.nix
+    ./service/onyx.nix
   ];
 }
