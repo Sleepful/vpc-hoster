@@ -181,6 +181,7 @@ in
     content = ''
       POSTGRES_PASSWORD=${config.sops.placeholder.onyx_postgres_password}
       OPENSEARCH_INITIAL_ADMIN_PASSWORD=${config.sops.placeholder.onyx_opensearch_password}
+      OPENSEARCH_ADMIN_PASSWORD=${config.sops.placeholder.onyx_opensearch_password}
       USER_AUTH_SECRET=${config.sops.placeholder.onyx_user_auth_secret}
       OAUTH_CLIENT_SECRET=${config.sops.placeholder.onyx_oidc_client_secret}
       ENCRYPTION_KEY_SECRET=${config.sops.placeholder.onyx_encryption_key_secret}

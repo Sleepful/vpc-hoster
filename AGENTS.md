@@ -253,6 +253,31 @@ use `run-ssh`. For any other `sudo ...` command, use `run-privileged`.
 Example: `sudo -u postgres psql`, `sudo rm`, `sudo cat` — all go through
 `run-privileged`.
 
+### `journalctl` wildcard for related services
+
+When debugging a multi-container app where all units share a prefix (e.g.,
+`docker-onyx-*`), use a shell-glob unit pattern to view all logs interleaved:
+
+```bash
+run-ssh house "sudo journalctl -u 'docker-onyx-*' --no-pager -o cat -n 200"
+```
+
+This is vastly more useful than inspecting one container at a time. Errors
+often cascade: a failed dependency (permission denied on a volume, unready
+database) will kill the units that depend on it, but the root cause only
+appears in that dependency's log. Interleaved output makes the causal chain
+visible without switching between unit names.
+
+Pipe through `grep -vE` to filter pull/download noise:
+
+```bash
+run-ssh house "sudo journalctl -u 'docker-onyx-*' --no-pager -o cat -n 200 \
+  | grep -vE 'Verifying|Download|Pull|Waiting|layer|complete|Checksum'"
+```
+
+The same pattern works for any unit family: `docker-*`, `postgresql*`,
+`hermes*`, `keycloak*`, and so on.
+
 ## Procedures
 
 ### Adding a New Service to an Existing Machine

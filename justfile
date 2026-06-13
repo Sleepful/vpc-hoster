@@ -100,8 +100,8 @@ syntax:
 	nix-instantiate --eval ./machines/builder/configuration.nix
 
 # Evaluate config directly from local machine (no builder hop)
-check-local machine="house":
-	nix --extra-experimental-features "nix-command flakes" eval .#nixosConfigurations.{{machine}}.config.system.build.toplevel.drvPath --raw
+# check-local machine="house":
+# 	nix --extra-experimental-features "nix-command flakes" eval .#nixosConfigurations.{{machine}}.config.system.build.toplevel.drvPath --raw
 
 # Deploy house from local machine (bootstrap, root on target)
 deploy-local-house-bootstrap target="root@house":

@@ -6,6 +6,29 @@ let
   fqdn = name: "${name}.${rootDomain}";
 in
 {
+  systemd.services."onyx-network" = {
+    description = "Docker network for Onyx containers";
+    wantedBy = [ "multi-user.target" ];
+    before = [
+      "docker-onyx-db.service"
+      "docker-onyx-redis.service"
+      "docker-onyx-opensearch.service"
+      "docker-onyx-model.service"
+      "docker-onyx-indexing-model.service"
+      "docker-onyx-api.service"
+      "docker-onyx-web.service"
+      "docker-onyx-background.service"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      ${pkgs.docker}/bin/docker network inspect onyx >/dev/null 2>&1 \
+        || ${pkgs.docker}/bin/docker network create onyx
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     onyx-db = {
       image = "docker.io/library/postgres:15.2-alpine";
@@ -15,7 +38,7 @@ in
       };
       environmentFiles = [ config.sops.templates."onyx-env".path ];
       cmd = [ "-c" "max_connections=250" ];
-      extraOptions = [ "--shm-size=1g" ];
+      extraOptions = [ "--shm-size=1g" "--network=onyx" ];
       volumes = [ "/var/lib/onyx/postgres:/var/lib/postgresql/data" ];
     };
 
@@ -23,6 +46,7 @@ in
       image = "docker.io/library/redis:7.4-alpine";
       autoStart = true;
       cmd = [ "redis-server" "--save" "" "--appendonly" "no" ];
+      extraOptions = [ "--network=onyx" ];
     };
 
     onyx-opensearch = {
@@ -32,9 +56,11 @@ in
         "discovery.type" = "single-node";
         "bootstrap.memory_lock" = "true";
         "OPENSEARCH_JAVA_OPTS" = "-Xms2g -Xmx2g";
+        "DISABLE_SECURITY_PLUGIN" = "true";
       };
       environmentFiles = [ config.sops.templates."onyx-env".path ];
       extraOptions = [
+        "--network=onyx"
         "--ulimit" "memlock=-1:-1"
         "--ulimit" "nofile=65536:65536"
         "--cap-add=IPC_LOCK"
@@ -46,6 +72,7 @@ in
       image = "docker.io/onyxdotapp/onyx-model-server:latest";
       autoStart = true;
       cmd = [ "uvicorn" "model_server.main:app" "--host" "0.0.0.0" "--port" "9000" ];
+      extraOptions = [ "--network=onyx" ];
       volumes = [ "/var/lib/onyx/model-cache-inference:/app/.cache/huggingface" ];
     };
 
@@ -56,6 +83,7 @@ in
         INDEXING_ONLY = "True";
       };
       cmd = [ "uvicorn" "model_server.main:app" "--host" "0.0.0.0" "--port" "9000" ];
+      extraOptions = [ "--network=onyx" ];
       volumes = [ "/var/lib/onyx/model-cache-indexing:/app/.cache/huggingface" ];
     };
 
@@ -74,16 +102,18 @@ in
         AUTH_TYPE = "oidc";
         OAUTH_CLIENT_ID = "onyx";
         OPENID_CONFIG_URL = "https://${fqdn sub.auth}/realms/${ids.keycloakRealm}/.well-known/openid-configuration";
-        WEB_DOMAIN = "${fqdn sub.chat}";
+        WEB_DOMAIN = "https://${fqdn sub.chat}";
         POSTGRES_HOST = "onyx-db";
         REDIS_HOST = "onyx-redis";
         OPENSEARCH_HOST = "onyx-opensearch";
+        OPENSEARCH_USE_SSL = "false";
         MODEL_SERVER_HOST = "onyx-model";
         INDEXING_MODEL_SERVER_HOST = "onyx-indexing-model";
         FILE_STORE_BACKEND = "postgres";
         DISABLE_TELEMETRY = "true";
       };
       environmentFiles = [ config.sops.templates."onyx-env".path ];
+      extraOptions = [ "--network=onyx" ];
       cmd = [
         "/bin/sh"
         "-c"
@@ -99,7 +129,9 @@ in
       dependsOn = [ "onyx-api" ];
       environment = {
         INTERNAL_URL = "http://onyx-api:8080";
+        WEB_DOMAIN = "https://${fqdn sub.chat}";
       };
+      extraOptions = [ "--network=onyx" ];
     };
 
     onyx-background = {
@@ -116,12 +148,14 @@ in
         POSTGRES_HOST = "onyx-db";
         REDIS_HOST = "onyx-redis";
         OPENSEARCH_HOST = "onyx-opensearch";
+        OPENSEARCH_USE_SSL = "false";
         MODEL_SERVER_HOST = "onyx-model";
         INDEXING_MODEL_SERVER_HOST = "onyx-indexing-model";
         FILE_STORE_BACKEND = "postgres";
         DISABLE_TELEMETRY = "true";
       };
       environmentFiles = [ config.sops.templates."onyx-env".path ];
+      extraOptions = [ "--network=onyx" ];
       cmd = [
         "/bin/sh"
         "-c"
@@ -131,35 +165,56 @@ in
     };
   };
 
+  services.nginx.appendHttpConfig = ''
+    map $http_upgrade $connection_upgrade {
+      default upgrade;
+      ""      close;
+    }
+  '';
+
   services.nginx.virtualHosts."${fqdn sub.chat}" = {
     onlySSL = true;
     useACMEHost = rootDomain;
+    extraConfig = ''
+      client_max_body_size 5G;
+      proxy_read_timeout 300s;
+      proxy_send_timeout 300s;
+      proxy_connect_timeout 300s;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Host $host;
+      proxy_set_header X-Forwarded-Port $server_port;
+    '';
     locations = {
-      "~ ^/api/ws/".extraConfig = ''
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
+      "~ ^/(api|openapi.json)(/.*)?$".extraConfig = ''
+        rewrite ^/api(/.*)$ $1 break;
+        proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-      '';
-      "/api/".extraConfig = ''
-        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Connection $connection_upgrade;
         proxy_http_version 1.1;
-        proxy_set_header Connection "";
         proxy_buffering off;
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:8080;
       '';
       "/".extraConfig = ''
-        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:3001;
       '';
     };
   };
 
+  # Bind-mount host directories. Ownership must match the uid/gid inside
+  # each container, otherwise the container process gets Permission denied.
+  # Verified via: docker run --rm --entrypoint id <image>
+  #   postgres:15.2-alpine         → uid=70(postgres)  gid=70(postgres)
+  #   opensearchproject/opensearch → uid=1000             gid=1000
   systemd.tmpfiles.rules = [
     "d /var/lib/onyx 0750 root root -"
-    "d /var/lib/onyx/postgres 0750 root root -"
-    "d /var/lib/onyx/opensearch 0750 root root -"
+    "d /var/lib/onyx/postgres 0750 70 70 -"
+    "d /var/lib/onyx/opensearch 0770 1000 1000 -"
     "d /var/lib/onyx/model-cache-inference 0750 root root -"
     "d /var/lib/onyx/model-cache-indexing 0750 root root -"
     "d /var/lib/onyx/api-logs 0750 root root -"
