@@ -150,8 +150,8 @@ qbt-test:
 	nix-shell -p python3 python3Packages.pytest --run "pytest machines/builder/src/service/qbittorrent/tests/ -v"
 
 SOPS_KEY_FILE := "~/.config/sops/age/keys.txt" # contains AGE-SECRET-KEY identities
-secret filename:
-	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops {{filename}}
+secret machine:
+	SOPS_AGE_KEY_FILE={{SOPS_KEY_FILE}} sops secrets/{{machine}}/core.yaml
 
 # Derive an age public key from a machine's SSH host key
 age-key machine="builder":

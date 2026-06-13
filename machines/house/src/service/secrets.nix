@@ -171,6 +171,23 @@ in
   sops.secrets.hermes_mattermost_allowed_users = {};
   sops.secrets.mattermost_oidc_secret = {};
 
+  sops.secrets.odysseus_admin_password = {};
+  sops.secrets.odysseus_searxng_secret = {};
+
+  sops.templates."odysseus-env" = {
+    content = ''
+      ODYSSEUS_ADMIN_PASSWORD=${config.sops.placeholder.odysseus_admin_password}
+    '';
+    mode = "0400";
+  };
+
+  sops.templates."odysseus-searxng-env" = {
+    content = ''
+      SEARXNG_SECRET=${config.sops.placeholder.odysseus_searxng_secret}
+    '';
+    mode = "0400";
+  };
+
   sops.templates."mattermost-oidc-env" = {
     content = ''
       MM_GITLABSETTINGS_SECRET=${config.sops.placeholder.mattermost_oidc_secret}

@@ -49,7 +49,7 @@ with lib;
       acmechallenge = mkOption { type = types.str; default = "acmechallenge"; };
       cal = mkOption { type = types.str; default = "cal"; };
       auth = mkOption { type = types.str; default = "auth"; };
-      # chat = mkOption { type = types.str; default = "chat"; };  # Unused 2026-05-29
+      chat = mkOption { type = types.str; default = "chat"; };
       dex = mkOption { type = types.str; default = "dex"; };
       docs = mkOption { type = types.str; default = "docs"; };
       email = mkOption { type = types.str; default = "email"; };

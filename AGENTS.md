@@ -131,7 +131,7 @@ just disk                    # Show builder disk/inode usage
 ### Secrets
 
 ```sh
-just secret secrets/house/core.yaml    # Edit encrypted secrets file
+just secret house                      # Edit encrypted secrets file (secrets/house/core.yaml)
 just age-key                           # Derive age public key from machine SSH host key
 just hash-bcrypt                       # Generate bcrypt hash locally
 just hash-bcrypt-house                 # Generate bcrypt hash on house
@@ -198,6 +198,18 @@ The qBittorrent companion scripts (Python) have a pytest suite:
 just qbt-test                # Run qBittorrent script tests (local, no SSH) (alias: just t)
 ```
 See `machines/builder/src/service/qbittorrent/tests/` for the test files.
+
+### Sidecar Actions (Container)
+
+Inside the Docker container, use `run-tests` to invoke whitelisted sidecar
+actions defined in `.opencode/sidecar/handler.py`:
+
+```sh
+run-tests check-house        # Full flake eval for house (runs `just check house`)
+```
+
+Actions run on the host via the sidecar socket. Output is redacted. See the
+`ACTIONS` dict in `handler.py` for the full list.
 
 **Deployment is the user's responsibility.** The user handles all deploys.
 Never run `just deploy`, `just deploy-remote`, `just deploy-local-house`,

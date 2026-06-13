@@ -25,7 +25,7 @@
       acmechallenge = lib.mkDefault "acmechallenge";
       auth = lib.mkDefault "auth";
       cal = lib.mkDefault "cal";
-      # chat = lib.mkDefault "chat";  # Unused 2026-05-29
+      chat = lib.mkDefault "chat";
       dex = lib.mkDefault "dex";
       docs = lib.mkDefault "docs";
       email = lib.mkDefault "email";
