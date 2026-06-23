@@ -33,6 +33,9 @@ in
         ButtonText = "Login with Keycloak";
         ButtonColor = "#ADD015";
       };
+      EmailSettings = {
+        EnableSignUpWithEmail = false;
+      };
     };
   };
 

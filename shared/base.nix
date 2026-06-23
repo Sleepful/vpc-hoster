@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 {
   imports =
     [
@@ -12,11 +12,12 @@
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.auto-optimise-store = true;
 
-  # Weekly garbage collection — delete generations older than 7 days
+  # Only garbage-collect when more than one system generation exists,
+  # so machines deployed infrequently never zero out their sole generation.
   nix.gc = {
     automatic = true;
     dates = "weekly";
-    options = "--delete-older-than 7d";
+    options = "--delete-old";
   };
 
   # Keep only the last 10 boot generations in the GRUB menu
