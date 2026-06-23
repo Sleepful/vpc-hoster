@@ -44,6 +44,7 @@
     ./service/synapse.nix
     ./service/hermes.nix
     ./service/mattermost.nix
+    ./service/matterbridge.nix
     ./service/firewall.nix
     ./service/onyx.nix
   ];

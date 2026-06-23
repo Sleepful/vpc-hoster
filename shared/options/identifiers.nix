@@ -179,5 +179,31 @@ with lib;
         description = "Keycloak group required for Matrix login. null disables the check.";
       };
     };
+
+    bridge = {
+      discordGuild = mkOption {
+        type = types.str;
+        example = "1014051032923385886";
+        description = "Discord server (guild) ID for the bridge bot.";
+      };
+
+      discordChannel = mkOption {
+        type = types.str;
+        example = "1014053253853495296";
+        description = "Discord channel ID to bridge.";
+      };
+
+      mattermostTeam = mkOption {
+        type = types.str;
+        example = "internet";
+        description = "Mattermost team name for the bridged channel.";
+      };
+
+      mattermostChannel = mkOption {
+        type = types.str;
+        example = "town-square";
+        description = "Mattermost channel URL slug to bridge (the segment after /channels/, not the internal ID).";
+      };
+    };
   };
 }

@@ -171,6 +171,9 @@ in
   sops.secrets.hermes_mattermost_allowed_users = {};
   sops.secrets.mattermost_oidc_secret = {};
 
+  sops.secrets.matterbridge_discord_token = {};
+  sops.secrets.matterbridge_mattermost_token = {};
+
   sops.secrets.onyx_user_auth_secret = {};
   sops.secrets.onyx_oidc_client_secret = {};
   sops.secrets.onyx_postgres_password = {};
@@ -194,6 +197,41 @@ in
       MM_GITLABSETTINGS_SECRET=${config.sops.placeholder.mattermost_oidc_secret}
     '';
     mode = "0400";
+  };
+
+  sops.templates.matterbridge_conf = {
+     content = ''
+      [general]
+      RemoteNickFormat = "**{NICK}** — "
+
+      [mattermost]
+      [mattermost.mm]
+      Server = "${fqdn sub.mm}"
+      Team = "${ids.bridge.mattermostTeam}"
+      Token = "${config.sops.placeholder.matterbridge_mattermost_token}"
+      PrefixMessagesWithNick = true
+
+      [discord]
+      [discord.discord]
+      Token = "${config.sops.placeholder.matterbridge_discord_token}"
+      Server = "${ids.bridge.discordGuild}"
+      EditDisable = false
+
+      [[gateway]]
+      name = "internet"
+      enable = true
+
+      [[gateway.inout]]
+      account = "mattermost.mm"
+      channel = "${ids.bridge.mattermostChannel}"
+
+      [[gateway.inout]]
+      account = "discord.discord"
+      channel = "ID:${ids.bridge.discordChannel}"
+    '';
+    owner = "matterbridge";
+    mode = "0400";
+    restartUnits = [ "matterbridge.service" ];
   };
 
   sops.templates."hermes-env" = {

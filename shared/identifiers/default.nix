@@ -71,5 +71,12 @@
     matrix = {
       requiredGroup = lib.mkDefault null;
     };
+
+    bridge = {
+      discordGuild = lib.mkDefault "0";
+      discordChannel = lib.mkDefault "0";
+      mattermostTeam = lib.mkDefault "team";
+      mattermostChannel = lib.mkDefault "channel";
+    };
   };
 }
